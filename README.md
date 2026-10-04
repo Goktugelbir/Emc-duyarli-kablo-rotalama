@@ -9,7 +9,7 @@ demetlemenin yarattığı 5572 EMC ihlal noktasını sıfıra indirirken demetle
 
 ## Etkileşimli 3B görünüm
 
-Dört yöntemin 3B görünümü arasında sekmelerle geçilebilen sayfa: **[GitHub Pages bağlantısı — yayınlandıktan sonra buraya eklenecek](https://KULLANICI-ADI.github.io/DEPO-ADI/)**
+Dört yöntemin 3B görünümü arasında sekmelerle geçilebilen sayfa: **[goktugelbir.github.io/Emc-duyarli-kablo-rotalama](https://goktugelbir.github.io/Emc-duyarli-kablo-rotalama/)**
 (yerel kopya: [`docs/index.html`](docs/index.html)).
 
 Pages'i açmak için: depo **Settings → Pages → Build and deployment → Source: "Deploy from a branch"**,
