@@ -177,7 +177,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 30 tests under [`tests/`](tests) (~7 s):
+There are 35 tests under [`tests/`](tests) (~7 s):
 
 - **Checks** (`test_checks.py`): circumradius, resampling, EMC, bend, capacity, keep-out and clearance
   counts on small examples that can be worked out by hand.

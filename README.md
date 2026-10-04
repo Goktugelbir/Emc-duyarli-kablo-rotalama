@@ -174,7 +174,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-[`tests/`](tests) altında 30 test vardır (~7 s):
+[`tests/`](tests) altında 35 test vardır (~7 s):
 
 - **Denetimler** (`test_checks.py`): çember yarıçapı, yeniden örnekleme, EMC, bükülme, kapasite,
   yasak hacim ve güvenlik payı sayımları elle hesaplanabilen küçük örneklerde doğrulanır.
@@ -436,7 +436,7 @@ independent Dijkstra, sequential bundling, EMC-aware bundling with rip-up-and-re
 Lagrangian relaxation of edge capacity, and an integrated method on a turn-aware graph that satisfies
 EMC separation, capacity, bend radius, keep-out and clearance at the same time (bundling ratio 0.382).
 Independent checks recompute every violation, a 40-trial robustness benchmark measures order and
-terminal sensitivity, and 30 pytest tests run in CI with pinned dependencies.
+terminal sensitivity, and 35 pytest tests run in CI with pinned dependencies.
 
 ---
 
