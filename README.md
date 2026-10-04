@@ -154,6 +154,7 @@ bu adım **internet bağlantısı** gerektirir; `docs/index.html`'i görüntüle
 | `--docs DIR` | `docs/` | etkileşimli sayfanın klasörü |
 | `--capacity K` | 2 | ayrıt kapasitesi |
 | `--clearance M` | 0.05 | yasak hacim güvenlik payı [m] |
+| `--order STR` | `input` | kablo önceliklendirme stratejisi (`input`, `critical-first`, `longest-first`, `shortest-first`) |
 
 Örneğin yalnızca metrikleri ve sayfayı birkaç saniyede üretmek için:
 
@@ -226,9 +227,10 @@ harness_demo/
   presentation.py# etkileşimli sayfa: sonuçları JSON olarak görüntüleyici şablonuna gömer
   viewer_template.html # three.js tabanlı etkileşimli 3B görüntüleyici şablonu (yakalama modu dahil)
   capture.py     # README 3B görsellerini sayfadan başsız Chrome ile yakalar (PNG + GIF)
+  export.py      # kablo listesi (CSV wirelist) ve 3B güzergâh (JSON routes) dışa aktarımı
 main.py          # uçtan uca çalıştırma, komut satırı seçenekleri
-tests/           # pytest testleri (30 test)
-outputs/         # 3B görseller (PNG, GIF), 2B grafikler, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+tests/           # pytest testleri (35 test)
+outputs/         # 3B görseller (PNG, GIF), wirelist.csv, routes.json, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
 docs/index.html  # GitHub Pages için tek sayfalık etkileşimli 3B görünüm
 .github/workflows/ci.yml   # testler + duman testi
 requirements.txt / requirements-dev.txt   # sabitlenmiş sürümler

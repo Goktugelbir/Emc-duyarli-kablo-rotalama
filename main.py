@@ -33,6 +33,7 @@ from harness_demo.routing import (
     route_lagrangian,
 )
 from harness_demo.scenarios import SCENARIO_SPECS, Cable, build_scenario, separation
+from harness_demo.export import export_routes_json, export_wirelist_csv, generate_wirelist_records
 from harness_demo.presentation import write_interactive_page
 
 ROOT = Path(__file__).parent
@@ -77,6 +78,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="sağlamlık testinde her deney ailesi için deneme sayısı; 0 = atla")
     p.add_argument("--capacity", type=int, default=CAPACITY_K, help="ayrıt kapasitesi K [kablo]")
     p.add_argument("--clearance", type=float, default=CLEARANCE_M, help="yasak hacim güvenlik payı [m]")
+    p.add_argument("--order", choices=["input", "critical-first", "longest-first", "shortest-first"],
+                   default="input", help="kablo önceliklendirme stratejisi (varsayılan: input)")
     return p.parse_args(argv)
 
 
@@ -139,11 +142,12 @@ def _run(args: argparse.Namespace, t_start: float) -> None:
 
     results = [
         route_baseline(graph, cables),
-        route_bundled(graph, cables, reuse_factor=REUSE_FACTOR),
-        route_emc_aware(graph, cables, separation, reuse_factor=REUSE_FACTOR, emc_penalty=EMC_PENALTY),
+        route_bundled(graph, cables, reuse_factor=REUSE_FACTOR, order_strategy=args.order),
+        route_emc_aware(graph, cables, separation, reuse_factor=REUSE_FACTOR, emc_penalty=EMC_PENALTY,
+                        order_strategy=args.order),
         route_lagrangian(graph, cables, capacity=args.capacity, iterations=LAGRANGE_ITERATIONS),
         route_integrated(graph, cables, separation, turns, args.capacity, reuse_factor=REUSE_FACTOR,
-                         emc_penalty=EMC_PENALTY),
+                         emc_penalty=EMC_PENALTY, order_strategy=args.order),
     ]
 
     def check(res: RoutingResult, cs: list[Cable], g: RoutingGraph = graph):
@@ -183,6 +187,12 @@ def _run(args: argparse.Namespace, t_start: float) -> None:
     (args.out / "metrics.md").write_text("\n".join(md), encoding="utf-8")
     history = [{k: _finite(v) for k, v in h.items()} for h in lagr.history]
     (args.out / "lagrangian_history.json").write_text(json.dumps(history, indent=1), encoding="utf-8")
+
+    # Industrial harness exports: wirelist CSV and 3D spline routes JSON
+    integrated_res = next((r for r in results if r.method == "integrated"), results[-1])
+    wirelist = generate_wirelist_records(graph, cables, integrated_res.routes)
+    export_wirelist_csv(wirelist, args.out / "wirelist.csv")
+    export_routes_json(graph, cables, results, args.out / "routes.json")
 
     if args.trials > 0:
         t0 = time.perf_counter()

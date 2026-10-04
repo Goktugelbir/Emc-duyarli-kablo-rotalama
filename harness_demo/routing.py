@@ -13,7 +13,7 @@ e) integrated      : (c) on a turn-aware graph (no turn sharper than the minimum
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -146,6 +146,43 @@ def turn_aware_path(turns: TurnGraph, cost: np.ndarray, source: int, target: int
 # --------------------------------------------------------------------------- sequential routing
 
 
+def order_cables(
+    cables: Sequence[Cable],
+    strategy: str = "input",
+    positions: np.ndarray | None = None,
+) -> list[Cable]:
+    """Sort cables according to a designated initial routing priority heuristic.
+
+    Supported strategies:
+    - "input": Original list order (default).
+    - "critical-first": Highest-EMC-separation classes first (power -> data -> signal),
+      and longest cables within the same class first.
+    - "longest-first": Longest direct terminal-to-terminal Euclidean distance first,
+      establishing trunk corridors early.
+    - "shortest-first": Shortest terminal-to-terminal distance first.
+    """
+    if strategy == "input":
+        return list(cables)
+
+    def dist(c: Cable) -> float:
+        if positions is not None:
+            return float(np.linalg.norm(positions[c.start] - positions[c.end]))
+        return 0.0
+
+    if strategy == "longest-first":
+        return sorted(cables, key=dist, reverse=True)
+    elif strategy == "shortest-first":
+        return sorted(cables, key=dist)
+    elif strategy == "critical-first":
+        class_priority = {"power": 0, "data": 1, "signal": 2}
+        return sorted(cables, key=lambda c: (class_priority.get(c.emc_class, 99), -dist(c)))
+    else:
+        raise ValueError(
+            f"Unknown ordering strategy: {strategy!r}. "
+            "Expected one of: 'input', 'critical-first', 'longest-first', 'shortest-first'."
+        )
+
+
 @dataclass
 class _SequentialConfig:
     """Cost model of the sequential methods (b, c, e)."""
@@ -159,6 +196,7 @@ class _SequentialConfig:
     turns: TurnGraph | None = None
     reroute_rounds: int = 0
     penalty_growth: float = 2.0  # EMC penalty multiplier per rip-up-and-reroute round
+    order_strategy: str = "input"
 
 
 def _cable_cost(
@@ -259,7 +297,8 @@ def _route_sequential(
     by_name = {c.name: c for c in cables}
     routes: dict[str, list[int]] = {}
     order: list[str] = []
-    for cable in cables:
+    initial_cables = order_cables(cables, cfg.order_strategy, graph.positions)
+    for cable in initial_cables:
         cost = _cable_cost(graph, tree, cable, routes, classes, cfg, cfg.emc_penalty)
         routes[cable.name] = _route_one(graph, cost, cable, cfg)
         order.append(cable.name)
@@ -297,10 +336,15 @@ def route_baseline(graph: RoutingGraph, cables: list[Cable]) -> RoutingResult:
                          order=[c.name for c in cables])
 
 
-def route_bundled(graph: RoutingGraph, cables: list[Cable], reuse_factor: float = 0.4) -> RoutingResult:
+def route_bundled(
+    graph: RoutingGraph,
+    cables: list[Cable],
+    reuse_factor: float = 0.4,
+    order_strategy: str = "input",
+) -> RoutingResult:
     """Sequential routing that rewards reusing edges of earlier cables."""
     t0 = time.perf_counter()
-    routes, order = _route_sequential(graph, cables, _SequentialConfig(reuse_factor=reuse_factor))
+    routes, order = _route_sequential(graph, cables, _SequentialConfig(reuse_factor=reuse_factor, order_strategy=order_strategy))
     return RoutingResult("bundled", "b) Demetleme", routes, time.perf_counter() - t0, order=order)
 
 
@@ -312,11 +356,12 @@ def route_emc_aware(
     emc_penalty: float = 20.0,
     emc_margin: float = 0.03,
     reroute_rounds: int = 5,
+    order_strategy: str = "input",
 ) -> RoutingResult:
     """Bundling plus a soft penalty near routes of other EMC classes, with rip-up-and-reroute."""
     t0 = time.perf_counter()
     cfg = _SequentialConfig(reuse_factor=reuse_factor, separation_fn=separation_fn, emc_penalty=emc_penalty,
-                            emc_margin=emc_margin, reroute_rounds=reroute_rounds)
+                            emc_margin=emc_margin, reroute_rounds=reroute_rounds, order_strategy=order_strategy)
     routes, order = _route_sequential(graph, cables, cfg)
     return RoutingResult("emc_aware", "c) EMC duyarlı demetleme", routes, time.perf_counter() - t0, order=order)
 
@@ -332,6 +377,7 @@ def route_integrated(
     emc_margin: float = 0.03,
     capacity_penalty: float = 1000.0,
     reroute_rounds: int = 10,
+    order_strategy: str = "input",
 ) -> RoutingResult:
     """EMC-aware bundling on the turn-aware graph with a (near-hard) capacity penalty.
 
@@ -341,7 +387,7 @@ def route_integrated(
     t0 = time.perf_counter()
     cfg = _SequentialConfig(reuse_factor=reuse_factor, separation_fn=separation_fn, emc_penalty=emc_penalty,
                             emc_margin=emc_margin, capacity=capacity, capacity_penalty=capacity_penalty,
-                            turns=turns, reroute_rounds=reroute_rounds)
+                            turns=turns, reroute_rounds=reroute_rounds, order_strategy=order_strategy)
     routes, order = _route_sequential(graph, cables, cfg)
     return RoutingResult("integrated", "e) Bütünleşik (EMC + kapasite + bükülme)", routes,
                          time.perf_counter() - t0, order=order)

@@ -13,8 +13,10 @@ import main
 from harness_demo.checks import circumradius, run_all_checks
 from harness_demo.routing import (
     NoPathError,
+    order_cables,
     route_conflicts,
     route_emc_aware,
+    route_integrated,
     route_lagrangian,
     turn_aware_path,
 )
@@ -106,3 +108,37 @@ def test_lagrangian_without_feasible_solution_fails_cleanly(graph, cables):
     """No capacity-feasible solution: the multipliers must stay finite (no NaN/inf steps)."""
     with pytest.raises(NoPathError):
         route_lagrangian(graph, cables[:3], capacity=0, iterations=5)
+
+
+def test_order_cables_strategies(cables, graph):
+    assert order_cables(cables, "input") == cables
+
+    longest = order_cables(cables, "longest-first", graph.positions)
+    pos = graph.positions
+    dists_long = [np.linalg.norm(pos[c.start] - pos[c.end]) for c in longest]
+    assert all(d1 >= d2 - 1e-9 for d1, d2 in zip(dists_long[:-1], dists_long[1:]))
+
+    shortest = order_cables(cables, "shortest-first", graph.positions)
+    dists_short = [np.linalg.norm(pos[c.start] - pos[c.end]) for c in shortest]
+    assert all(d1 <= d2 + 1e-9 for d1, d2 in zip(dists_short[:-1], dists_short[1:]))
+
+    critical = order_cables(cables, "critical-first", graph.positions)
+    classes = [c.emc_class for c in critical]
+    power_end = max(i for i, cl in enumerate(classes) if cl == "power")
+    data_start = min(i for i, cl in enumerate(classes) if cl == "data")
+    signal_start = min(i for i, cl in enumerate(classes) if cl == "signal")
+    assert power_end < data_start < signal_start
+
+    with pytest.raises(ValueError):
+        order_cables(cables, "invalid-strategy")
+
+
+def test_routing_with_smart_ordering(graph, cables, turns):
+    for strategy in ("critical-first", "longest-first"):
+        res = route_integrated(
+            graph, cables, separation, turns, capacity=main.CAPACITY_K,
+            order_strategy=strategy,
+        )
+        assert set(res.routes) == {c.name for c in cables}
+        assert all(len(path) >= 2 for path in res.routes.values())
+

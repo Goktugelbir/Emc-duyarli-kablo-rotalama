@@ -12,7 +12,7 @@ def test_main_without_images(tmp_path):
     out, docs = tmp_path / "out", tmp_path / "docs"
     main.main(["--no-images", "--trials", "1", "--out", str(out), "--docs", str(docs)])
 
-    for name in ("metrics.md", "robustness.md", "lagrangian_history.json", "run_log.txt"):
+    for name in ("metrics.md", "robustness.md", "lagrangian_history.json", "run_log.txt", "wirelist.csv", "routes.json"):
         assert (out / name).is_file(), name
     assert not list(out.glob("*.png")), "--no-images must not export images"
 

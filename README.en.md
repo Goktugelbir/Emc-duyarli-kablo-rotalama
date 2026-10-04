@@ -157,6 +157,7 @@ three.js from a CDN, this step needs an **internet connection**; viewing `docs/i
 | `--docs DIR` | `docs/` | folder of the interactive page |
 | `--capacity K` | 2 | edge capacity |
 | `--clearance M` | 0.05 | keep-out clearance [m] |
+| `--order STR` | `input` | cable priority ordering strategy (`input`, `critical-first`, `longest-first`, `shortest-first`) |
 
 For example, to produce only the metrics and the page in a few seconds:
 
@@ -228,9 +229,10 @@ harness_demo/
   presentation.py# interactive page: embeds the results as JSON into the viewer template
   viewer_template.html # three.js-based interactive 3D viewer template (capture mode included)
   capture.py     # captures the README 3D images from the page with headless Chrome (PNG + GIF)
+  export.py      # wirelist (CSV) and 3D route coordinates (JSON) exports
 main.py          # end-to-end run, command-line options
-tests/           # pytest tests (30 tests)
-outputs/         # 3D images (PNG, GIF), 2D charts, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+tests/           # pytest tests (35 tests)
+outputs/         # 3D images (PNG, GIF), 2D charts, wirelist.csv, routes.json, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
 docs/index.html  # single-page interactive 3D view for GitHub Pages
 .github/workflows/ci.yml   # tests + smoke run
 requirements.txt / requirements-dev.txt   # pinned versions
