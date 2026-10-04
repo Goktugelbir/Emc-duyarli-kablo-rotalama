@@ -114,7 +114,7 @@ def run(args: argparse.Namespace) -> None:
 
         # plotly warns that per-call kaleido options are ignored while a shared server runs; that is intended.
         warnings.filterwarnings("ignore", message="The kopts argument is ignored if using a server")
-        kaleido.start_sync_server(n=4, silence_warnings=True)  # one headless browser (4 tabs) for all exports
+        kaleido.start_sync_server(n=1, silence_warnings=True)  # one headless browser for the 2D charts
     try:
         _run(args, t_start)
     finally:
@@ -220,7 +220,7 @@ def write_presentation(
     rows: list[dict[str, object]],
     args: argparse.Namespace,
 ) -> None:
-    """Interactive page always; route PNGs, convergence plot, comparison, GIF and chart unless --no-images."""
+    """Interactive page always; unless --no-images also the 2D charts and the 3D images captured from the page."""
     by_method = {r.method: (r, row) for r, row in zip(results, rows)}
     classes = [c.emc_class for c in cables]
 
@@ -230,32 +230,23 @@ def write_presentation(
         assert len(pts) == row["emc_points"], "violation points must match the reported metric"
         violations[res.method] = pts
 
+    page = args.docs / "index.html"
     write_interactive_page(
-        mesh, volumes, cables, results, rows, violations, args.docs / "index.html", PARAMS.radius, PARAMS.length,
+        mesh, volumes, cables, results, rows, violations, page, PARAMS.radius, PARAMS.length,
         clearance=args.clearance,
     )
     if args.no_images:
         return
 
-    from harness_demo.presentation import plot_comparison, plot_metrics_chart, render_rotation_gif
-    from harness_demo.visualize import plot_convergence, plot_routes
+    from harness_demo.capture import capture_readme_images
+    from harness_demo.visualize import plot_convergence, plot_metrics_chart
 
-    for res in results:
-        plot_routes(mesh, volumes, cables, res.routes, res.label, args.out / f"routes_{res.method}.png")
     plot_convergence(by_method["lagrangian"][0].history, args.out / "lagrangian_convergence.png")
-
-    panels = []
-    for method, name in (("bundled", "Demetleme"), ("integrated", "Bütünleşik")):
-        res, row = by_method[method]
-        caption = (f"{name} — EMC: {row['emc_points']} nokta · kapasite: {row['capacity_edges']} ayrıt · "
-                   f"bükülme: {row['bend_points']}")
-        panels.append((res.routes, caption, violations[method]))
-    plot_comparison(mesh, volumes, cables, panels, args.out / "comparison.png")
-
     plot_metrics_chart(rows, args.out / "metrics_chart.png")
-
-    best = by_method["integrated"][0]
-    render_rotation_gif(mesh, volumes, cables, best.routes, best.label, args.out / "demo.gif")
+    t0 = time.perf_counter()
+    written = capture_readme_images(page, args.out, [r.method for r in results],
+                                    comparison=("bundled", "integrated"), animated="integrated")
+    print(f"3B görseller etkileşimli sayfadan yakalandı ({len(written)} dosya, {time.perf_counter() - t0:.1f} s).")
 
 
 if __name__ == "__main__":

@@ -9,14 +9,21 @@ hacimlere güvenlik payını birlikte gözeten bütünleşik rotalama, bu senary
 5660 EMC ihlal noktasını, 116 kapasite ihlalini ve 15 bükülme ihlalini sıfıra indirirken demetlenme
 oranını 0,382'de tutuyor.**
 
-![Demetleme ve bütünleşik rotalama karşılaştırması](outputs/comparison.png)
+![Demetleme ve bütünleşik rotalama karşılaştırması: aynı senaryo, aynı kamera](outputs/comparison.png)
 
-![Bütünleşik rotalama — döner 3B görünüm](outputs/demo.gif)
+*Gövdeye alttan, kemerin içine bakış. Solda demetleme: kırmızı noktalar bağımsız denetimin bulduğu EMC
+ihlalleridir. Sağda bütünleşik rotalama: tüm denetimler 0.*
+
+![Bütünleşik rotalama — kablolar rotalama sırasıyla döşeniyor](outputs/demo.gif)
+
+*Bütünleşik yöntem (e): kablolar, yöntemin onları rotaladığı sırayla tek tek döşenir; kelepçeler sonda belirir.*
 
 ## Etkileşimli 3B görünüm
 
 Beş yöntemin 3B görünümü arasında sekmelerle geçilebilen sayfa: **[goktugelbir.github.io/Emc-duyarli-kablo-rotalama](https://goktugelbir.github.io/Emc-duyarli-kablo-rotalama/)**
 (yerel kopya: [`docs/index.html`](docs/index.html)).
+
+![Etkileşimli görünüm — açık arka uçtan gövde kesitinin içi](outputs/viewer_inside.png)
 
 Sayfa three.js ile fiziksel tabanlı malzeme, ortam ışığı ve gölgelerle çizilir:
 
@@ -128,12 +135,14 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Bu komut tüm çıktıları yeniden üretir: `outputs/` altındaki metrik ve sağlamlık tabloları, PNG
-görünümleri, `comparison.png`, `metrics_chart.png`, `demo.gif`, `run_log.txt` ve `docs/index.html`.
-Bizim makinemizde toplam süre ~75 s'dir: ~37 s sağlamlık testi, ~35 s görüntü dışa aktarımı,
-~2 s mesh, rotalama ve denetimler. PNG üretimi için `kaleido` 1.x sistemde kurulu bir
-Chrome/Chromium kullanır; yoksa `plotly_get_chrome` komutuyla indirilebilir. `docs/index.html`
-three.js'i CDN'den yükler (görüntülemek için internet gerekir).
+Bu komut tüm çıktıları yeniden üretir: `outputs/` altındaki metrik ve sağlamlık tabloları, 3B görseller
+(`routes_*.png`, `comparison.png`, `viewer_inside.png`, `demo.gif`), 2B grafikler (`metrics_chart.png`,
+`lagrangian_convergence.png`), `run_log.txt` ve `docs/index.html`. Bizim makinemizde toplam süre ~65 s'dir:
+~37 s sağlamlık testi, ~22 s 3B görsellerin yakalanması, ~4 s 2B grafikler, ~2 s mesh, rotalama ve denetimler.
+
+Görüntü üretimi sistemde kurulu bir Chrome/Chromium kullanır (yoksa `plotly_get_chrome` komutuyla
+indirilebilir). 3B görseller etkileşimli sayfadan yakalandığı ve sayfa three.js'i CDN'den yüklediği için
+bu adım **internet bağlantısı** gerektirir; `docs/index.html`'i görüntülemek için de internet gerekir.
 
 ### Komut satırı seçenekleri
 
@@ -188,16 +197,19 @@ request'te Python 3.11 ile testleri ve `python main.py --no-images --trials 3` d
 
 ### Görüntülerle ilgili teknik notlar
 
-- Statik 3B görünümler (PNG, GIF) plotly ile çizilir. Başsız (headless) WebGL'de bir figürde birden
-  fazla 3B sahne güvenilir çizilmediği için `comparison.png`'nin iki paneli ve `demo.gif`'in her
-  karesi ayrı figürler olarak dışa aktarılır. Pillow yalnızca bu hazır PNG'leri yan yana
-  yerleştirmek ve GIF karelerini birleştirmek için kullanılır; piksel düzeyinde düzenleme yapılmaz.
-- `comparison.png` üzerindeki kırmızı ✕ işaretleri, `checks.py`'nin bulduğu EMC ihlal
-  noktalarının kendisidir. Panel başlıklarındaki sayılar metrik tablosundan alınır; kod, işaret
-  sayısının tablodaki değerle aynı olduğunu her yöntem için `assert` ile doğrular.
-- Plotly görsellerinde yarı saydam hacimler, arkalarındaki gövde yüzeyinde kalan kabloları
-  hacmin "üstünden geçiyormuş" gibi gösterebilir; bu bir perspektif etkisidir. Yasak hacim ve
-  güvenlik payı denetimleri bütünleşik çözümde 0'dır.
+- **README'deki tüm 3B görseller etkileşimli sayfanın kendisinden yakalanır** (`harness_demo/capture.py`).
+  Sayfa başsız Chrome'da yakalama modunda (`docs/index.html?capture`) açılır; bu modda yalnızca 3B görünüm
+  gösterilir ve sayfa, yöntem seçmek, kamerayı yerleştirmek ve rotalama ilerlemesini ayarlamak için bir
+  `window.viewer` arayüzü sunar. Chrome, kaleido'nun da kullandığı `choreographer` kütüphanesiyle
+  DevTools protokolü üzerinden sürülür. Yani README'de görülen, sayfada etkileşimli olarak görülenle birebir aynıdır.
+- Görsellerin başlıklarındaki sayılar sayfaya gömülü metriklerden gelir. Kırmızı noktalar, `checks.py`'nin
+  bulduğu EMC ihlal noktalarının kendisidir (yakalama modunda daha görünür olmaları için iki kat büyük çizilir).
+  Kod, her yöntem için nokta sayısının tablodaki değerle aynı olduğunu `assert` ile doğrular.
+- Pillow yalnızca hazır ekran görüntülerini yan yana yerleştirmek ve GIF karelerini birleştirmek için kullanılır;
+  piksel düzeyinde düzenleme yapılmaz. GIF'te kamera sabittir ve tüm kareler ortak bir palet kullanır
+  (EMC sınıf renkleri palette garanti edilir). Böylece dosya yalnızca değişen bölgeleri saklar ve küçük kalır
+  (~200 KB).
+- Metrik grafiği ve Lagrange yakınsama grafiği plotly ile çizilir (`harness_demo/visualize.py`).
 
 ## Proje yapısı
 
@@ -210,12 +222,13 @@ harness_demo/
   checks.py      # bağımsız denetimler (rotalama kodunu kullanmaz)
   metrics.py     # metrikler ve tablo biçimlendirme
   benchmark.py   # sağlamlık testi: rastgele kablo sırası ve uç nokta sapması
-  visualize.py   # plotly 3B görselleştirme ve yakınsama grafiği
-  presentation.py# karşılaştırma görseli, döner GIF, metrik grafiği, etkileşimli sayfa verisi
-  viewer_template.html # three.js tabanlı etkileşimli 3B görüntüleyici şablonu
+  visualize.py   # 2B grafikler (plotly): metrik grafiği, Lagrange yakınsaması
+  presentation.py# etkileşimli sayfa: sonuçları JSON olarak görüntüleyici şablonuna gömer
+  viewer_template.html # three.js tabanlı etkileşimli 3B görüntüleyici şablonu (yakalama modu dahil)
+  capture.py     # README 3B görsellerini sayfadan başsız Chrome ile yakalar (PNG + GIF)
 main.py          # uçtan uca çalıştırma, komut satırı seçenekleri
 tests/           # pytest testleri (30 test)
-outputs/         # PNG, GIF, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+outputs/         # 3B görseller (PNG, GIF), 2B grafikler, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
 docs/index.html  # GitHub Pages için tek sayfalık etkileşimli 3B görünüm
 .github/workflows/ci.yml   # testler + duman testi
 requirements.txt / requirements-dev.txt   # sabitlenmiş sürümler
@@ -312,9 +325,9 @@ koordinatlarını alıp her şeyi geometriden yeniden hesaplar:
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | a) Baseline (bağımsız Dijkstra) | 61.66 | 51.65 | 0.162 | 980 | 0 | 0 | 0 | 20 | 0.00 |
 | b) Demetleme | 71.84 | 17.80 | 0.752 | 5660 | 15 | 0 | 0 | 116 | 0.01 |
-| c) EMC duyarlı demetleme | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.13 |
-| d) Lagrange gevşetmesi (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.93 |
-| e) Bütünleşik (EMC + kapasite + bükülme) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.10 |
+| c) EMC duyarlı demetleme | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.12 |
+| d) Lagrange gevşetmesi (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.91 |
+| e) Bütünleşik (EMC + kapasite + bükülme) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.09 |
 
 ![Demetlenme oranı, EMC ihlali ve kapasite ihlali, yöntem başına](outputs/metrics_chart.png)
 
@@ -385,11 +398,11 @@ bunu doğrular). Tüm denemeler bağımsız denetimlerle ölçülür (`outputs/r
 
 ![Lagrange yakınsaması](outputs/lagrangian_convergence.png)
 
-Etkileşimli sürüm: [`docs/index.html`](docs/index.html) (beş yöntem tek sayfada). Statik 3B görsellerde
-kabloların gövde yüzeyiyle çakışmaması ve üst üste binen kabloların ayırt edilebilmesi için her kablo
-yüzeyden içeri doğru 2–6 cm kaydırılarak çizilmiştir. Etkileşimli sayfada demet ekseni yüzeyden
-~10 cm kaldırılır ve köşeler yumuşatılır. Her iki kaydırma da yalnızca görseldir; denetimlere ve
-metriklere girmez.
+Tüm görseller aynı kameradan, gövdeye alttan bakılarak etkileşimli sayfadan yakalanmıştır
+([`docs/index.html`](docs/index.html), beş yöntem tek sayfada). Görsellerde demet ekseni yüzeyden ~10 cm
+kaldırılır, aynı güzergâhı paylaşan kablolar demet içinde yan yana dizilir ve köşeler yumuşatılır; bunlar
+yalnızca görseldir, denetimlere ve metriklere girmez. Frame, stringer, kelepçe, konnektör ve ekipman rafları
+da görseldir.
 
 ## Asıl projede nasıl genişletilir
 

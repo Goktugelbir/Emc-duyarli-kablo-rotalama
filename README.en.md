@@ -9,15 +9,22 @@ bend radius and a clearance around keep-out volumes reduces the 5660 EMC violati
 violations and 15 bend violations created by bundling in this scenario to zero, while keeping the
 bundling ratio at 0.382.**
 
-![Bundling vs. integrated routing](outputs/comparison.png)
+![Bundling vs. integrated routing: same scenario, same camera](outputs/comparison.png)
 
-![Integrated routing — rotating 3D view](outputs/demo.gif)
+*Looking up into the arch from below the fuselage. Left, bundling: the red dots are the EMC violations found by
+the independent check. Right, integrated routing: every check is 0.*
+
+![Integrated routing — cables laid in routing order](outputs/demo.gif)
+
+*Integrated method (e): cables are laid one by one in the order the method routed them; clamps appear at the end.*
 
 ## Interactive 3D view
 
 A page where you can switch between the 3D views of the five methods with tabs:
 **[goktugelbir.github.io/Emc-duyarli-kablo-rotalama](https://goktugelbir.github.io/Emc-duyarli-kablo-rotalama/)**
 (local copy: [`docs/index.html`](docs/index.html)).
+
+![Interactive view — inside the fuselage section from the open aft end](outputs/viewer_inside.png)
 
 The page is rendered with three.js using physically based materials, environment lighting and shadows:
 
@@ -131,12 +138,14 @@ pip install -r requirements.txt
 python main.py
 ```
 
-This command regenerates all outputs: the metrics and robustness tables under `outputs/`, the PNG
-views, `comparison.png`, `metrics_chart.png`, `demo.gif`, `run_log.txt` and `docs/index.html`.
-On our machine the total time is ~75 s: ~37 s robustness benchmark, ~35 s image export and ~2 s
-for mesh, routing and checks. For PNG generation `kaleido` 1.x uses a Chrome/Chromium installed
-on the system; if there is none, it can be downloaded with the `plotly_get_chrome` command.
-`docs/index.html` loads three.js from a CDN (an internet connection is needed to view it).
+This command regenerates all outputs: the metrics and robustness tables under `outputs/`, the 3D images
+(`routes_*.png`, `comparison.png`, `viewer_inside.png`, `demo.gif`), the 2D charts (`metrics_chart.png`,
+`lagrangian_convergence.png`), `run_log.txt` and `docs/index.html`. On our machine the total time is ~65 s:
+~37 s robustness benchmark, ~22 s capturing the 3D images, ~4 s 2D charts and ~2 s for mesh, routing and checks.
+
+Image export uses a Chrome/Chromium installed on the system (if there is none, it can be downloaded with the
+`plotly_get_chrome` command). Since the 3D images are captured from the interactive page and the page loads
+three.js from a CDN, this step needs an **internet connection**; viewing `docs/index.html` needs one as well.
 
 ### Command-line options
 
@@ -191,16 +200,18 @@ the outputs as an artifact.
 
 ### Technical notes on the images
 
-- The static 3D views (PNG, GIF) are drawn with plotly. Because multiple 3D scenes in one figure are
-  not rendered reliably in headless WebGL, the two panels of `comparison.png` and each frame of
-  `demo.gif` are exported as separate figures. Pillow is used only to place these finished PNGs side
-  by side and to assemble the GIF frames; no pixel-level editing is done.
-- The red ✕ markers on `comparison.png` are the EMC violation points found by `checks.py`
-  themselves. The numbers in the panel titles are taken from the metrics table; for every method the
-  code verifies with an `assert` that the number of markers equals the value in the table.
-- In the plotly images the translucent volumes can make a cable lying on the skin behind a volume look
-  as if it passed "over" the volume; this is a perspective effect. The keep-out and clearance checks
-  are 0 for the integrated solution.
+- **All 3D images in this README are captured from the interactive page itself** (`harness_demo/capture.py`).
+  The page is opened in headless Chrome in its capture mode (`docs/index.html?capture`): only the 3D view is
+  shown and the page exposes a `window.viewer` interface to select a method, place the camera and set the
+  routing progress. Chrome is driven over the DevTools protocol with `choreographer`, the library kaleido uses
+  as well. What you see in the README is therefore exactly what the interactive page shows.
+- The numbers in the image captions come from the metrics embedded in the page. The red dots are the EMC
+  violation points found by `checks.py` themselves (drawn twice as large in capture mode so they stay visible);
+  for every method the code verifies with an `assert` that their number equals the value in the table.
+- Pillow is used only to place the finished screenshots side by side and to assemble the GIF frames; no
+  pixel-level editing is done. In the GIF the camera is fixed and all frames share one palette (the EMC class
+  colours are guaranteed to be in it), so the file only stores the regions that change and stays small (~200 KB).
+- The metrics chart and the Lagrangian convergence plot are drawn with plotly (`harness_demo/visualize.py`).
 
 ## Project structure
 
@@ -213,12 +224,13 @@ harness_demo/
   checks.py      # independent checks (do not use the routing code)
   metrics.py     # metrics and table formatting
   benchmark.py   # robustness benchmark: random cable order and terminal perturbation
-  visualize.py   # plotly 3D visualisation and convergence plot
-  presentation.py# comparison image, rotating GIF, metrics chart, interactive page data
-  viewer_template.html # three.js-based interactive 3D viewer template
+  visualize.py   # 2D charts (plotly): metrics chart, Lagrangian convergence
+  presentation.py# interactive page: embeds the results as JSON into the viewer template
+  viewer_template.html # three.js-based interactive 3D viewer template (capture mode included)
+  capture.py     # captures the README 3D images from the page with headless Chrome (PNG + GIF)
 main.py          # end-to-end run, command-line options
 tests/           # pytest tests (30 tests)
-outputs/         # PNG, GIF, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+outputs/         # 3D images (PNG, GIF), 2D charts, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
 docs/index.html  # single-page interactive 3D view for GitHub Pages
 .github/workflows/ci.yml   # tests + smoke run
 requirements.txt / requirements-dev.txt   # pinned versions
@@ -315,9 +327,9 @@ Output of `python main.py` (same as `outputs/metrics.md`):
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | a) Baseline (independent Dijkstra) | 61.66 | 51.65 | 0.162 | 980 | 0 | 0 | 0 | 20 | 0.00 |
 | b) Bundling | 71.84 | 17.80 | 0.752 | 5660 | 15 | 0 | 0 | 116 | 0.01 |
-| c) EMC-aware bundling | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.13 |
-| d) Lagrangian relaxation (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.93 |
-| e) Integrated (EMC + capacity + bend) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.10 |
+| c) EMC-aware bundling | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.12 |
+| d) Lagrangian relaxation (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.91 |
+| e) Integrated (EMC + capacity + bend) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.09 |
 
 ![Bundling ratio, EMC violations and capacity violations per method](outputs/metrics_chart.png)
 
@@ -390,11 +402,11 @@ rotalama" = rip-up and reroute):
 
 ![Lagrangian convergence](outputs/lagrangian_convergence.png)
 
-Interactive version: [`docs/index.html`](docs/index.html) (all five methods on one page). In the static
-3D images each cable is drawn shifted 2–6 cm inward from the surface so that the cables do not coincide
-with the fuselage surface and overlapping cables can be told apart. In the interactive page the bundle
-axis is lifted ~10 cm off the surface and its corners are smoothed. Both shifts are visual only and do not
-enter the checks or metrics.
+All images are captured from the interactive page with the same camera, looking up into the fuselage from
+below ([`docs/index.html`](docs/index.html), all five methods on one page). In the images the bundle axis is
+lifted ~10 cm off the surface, cables sharing a route are laid side by side inside the bundle and corners are
+smoothed; this is visual only and does not enter the checks or metrics. Frames, stringers, clamps, connectors
+and equipment racks are visual as well.
 
 > Note: the images, tables and the interactive page are generated with Turkish labels.
 

@@ -88,6 +88,18 @@
   .selinfo { margin-top: 10px; font-size: .9rem; color: var(--text-2); min-height: 1.5em; }
   footer { margin-top: 14px; font-size: .84rem; color: var(--text-2); max-width: 95ch; }
   code { font-size: .92em; }
+  .caption { left: 16px; top: 14px; background: rgba(14,16,19,.8); border-radius: 10px; padding: 10px 14px;
+             font-size: 17px; line-height: 1.45; display: none; }
+  .caption b { font-size: 19px; }
+  .caption .ok { color: #5fd39a; font-weight: 700; } .caption .ng { color: #ff7a7a; font-weight: 700; }
+  /* Capture mode (?capture): only the 3D view, used to render the README images. */
+  body.capture main { max-width: none; padding: 0; }
+  body.capture h1, body.capture p.lead, body.capture .tabs, body.capture .stats, body.capture .controls,
+  body.capture .selinfo, body.capture footer, body.capture .playbar { display: none; }
+  body.capture .viewer { position: fixed; inset: 0; height: 100vh; min-height: 0; border: 0; border-radius: 0; }
+  body.capture .caption { display: block; }
+  body.capture .status { left: auto; right: 16px; top: 14px; font-size: 16px; padding: 8px 12px; }
+  body.capture .legend { font-size: 14px; }
   @media (max-width: 640px) {
     .viewer { height: 62vh; min-height: 360px; }
     .legend { font-size: 11px; padding: 6px 8px; }
@@ -104,6 +116,7 @@
   <div class="stats" id="stats" aria-live="polite"></div>
   <div class="viewer" id="viewer">
     <div class="loading" id="loading">3B görünüm yükleniyor…</div>
+    <div class="hud caption" id="caption"></div>
     <div class="hud status" id="status" aria-live="polite"></div>
     <div class="hud legend" id="legend"></div>
     <div class="hud playbar"><button type="button" id="play">▶ Rotalamayı oynat</button></div>
@@ -139,6 +152,8 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
 const D = JSON.parse(document.getElementById("data").textContent);
+const CAPTURE = new URLSearchParams(location.search).has("capture");   // README image rendering
+if (CAPTURE) document.body.classList.add("capture");
 const R = D.radius, LEN = D.length, V = D.mesh.v;
 const LIFT = 0.105;          // visual standoff of the bundle centreline off the skin [m]
 const SLOT = 0.017;          // spacing of cables inside a bundle [m]
@@ -618,7 +633,7 @@ function buildViolations(flat, parent) {
     pts.push(p.addScaledVector(inward(p), LIFT));
   }
   if (!pts.length) return;
-  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012, 10, 8), M.viol, pts.length);
+  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(CAPTURE ? 0.024 : 0.012, 10, 8), M.viol, pts.length);
   const mtx = new THREE.Matrix4();
   pts.forEach((p, k) => inst.setMatrixAt(k, mtx.makeTranslation(p.x, p.y, p.z)));
   parent.add(inst);
@@ -700,9 +715,10 @@ for (const [key, v] of Object.entries(VIEWS)) {
   b.addEventListener("click", () => flyTo(key));
   viewsEl.appendChild(b);
 }
-let tween = null;
+let tween = null, currentView = "inside";
 function flyTo(key, instant = false) {
   const v = VIEWS[key];
+  currentView = key;
   setToggle("floor", v.floor);
   const p1 = new THREE.Vector3(...v.pos), t1 = new THREE.Vector3(...v.target);
   if (instant || REDUCED) { camera.position.copy(p1); controls.target.copy(t1); tween = null; return; }
@@ -847,15 +863,56 @@ function loop(now) {
       statusEl.textContent = `Rotalanıyor: ${cb.c.name} (${cb.c.cls}) — ${Math.floor(f) + 1}/${n}`;
     }
   }
-  if (actuatorArm && !REDUCED) actuatorArm.rotation.x = 0.55 * Math.sin(now / 1000 * 0.9);
+  if (actuatorArm && !REDUCED && !CAPTURE) actuatorArm.rotation.x = 0.55 * Math.sin(now / 1000 * 0.9);
   if (controls.update() && pointerPx) updateHover();   // the camera moved under a resting pointer
   renderer.render(scene, camera);
   labelRenderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
 
+// ---------------------------------------------------------------- scripting interface (README image capture)
+function captionHtml(m) {
+  const cls = v => (v ? "ng" : "ok");
+  const fmt = (x, d) => x.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  return `<b>${m.label}</b><br>EMC <span class="${cls(m.emc_points)}">${fmt(m.emc_points, 0)} nokta</span> · ` +
+    `kapasite <span class="${cls(m.capacity_edges)}">${m.capacity_edges} ayrıt</span> · ` +
+    `bükülme <span class="${cls(m.bend_points)}">${m.bend_points}</span> · demetlenme ${fmt(m.bundling_ratio, 3)}`;
+}
+window.viewer = {
+  methods: methods.map(v => v.m.key),
+  cableCount: D.cables.length,
+  select(key) { select(key, false); document.getElementById("caption").innerHTML = captionHtml(methods[active].m); },
+  view(key) { flyTo(key, true); },
+  orbit(deg) {   // rotate the current preset camera about the vertical axis through its target
+    const v = VIEWS[currentView], t = new THREE.Vector3(...v.target);
+    const off = new THREE.Vector3(...v.pos).sub(t).applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(deg));
+    camera.position.copy(t).add(off); controls.target.copy(t); controls.update();
+  },
+  progress(f) {   // f in [0, n]: cables drawn so far in routing order; clamps/violations only when complete
+    const v = methods[active], n = v.cables.length;
+    setProgress(v, f);
+    v.clampsG.visible = f >= n && chipEls.clamps.checked;
+    v.violG.visible = f >= n && chipEls.viol.checked;
+    const k = Math.min(Math.floor(f), n - 1), cb = v.cables[v.seq[k]];
+    statusEl.textContent = f >= n ? "" : `Rotalanıyor: ${cb.c.name} (${cb.c.cls}) — ${k + 1}/${n}`;
+  },
+  camera(pos, target, fov) {   // explicit camera for captures; fov keeps the horizontal field of view otherwise
+    camera.position.set(...pos); controls.target.set(...target);
+    if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    controls.update();
+  },
+  labels(mode) {   // "all" | "context" (volumes and equipment only) | "none"
+    labels.visible = mode !== "none";
+    cableLabels.visible = mode === "all";
+  },
+  toggle: setToggle,
+  actuator(angle) { if (actuatorArm) actuatorArm.rotation.x = angle; },
+  frame: () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+};
+
 flyTo("inside", true);
-select(D.initial, true);
+select(D.initial, !CAPTURE);
+if (CAPTURE) window.viewer.select(D.initial);
 document.getElementById("loading").remove();
 window.__viewerReady = true;
 requestAnimationFrame(loop);

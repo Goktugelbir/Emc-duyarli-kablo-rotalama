@@ -1,113 +1,30 @@
-"""3D route visualisation and Lagrangian convergence plot (plotly)."""
+"""2D charts (plotly): Lagrangian convergence and the per-method metrics chart.
+
+The 3D images are rendered from the interactive three.js page, see `capture.py`.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import plotly.graph_objects as go
-import trimesh
-
-from .geometry import ForbiddenVolume
-from .scenarios import Cable
+from plotly.subplots import make_subplots
 
 # Categorical slots 1-3 of a colour-blind-validated palette; red is reserved for keep-out volumes.
 CLASS_COLORS: dict[str, str] = {"power": "#eb6834", "signal": "#2a78d6", "data": "#1baf7a"}
-FORBIDDEN_COLOR = "#e34948"
-HULL_COLOR = "#9a9890"
-DISPLAY_OFFSET_BASE_M = 0.02  # visual-only lift off the hull, avoids z-fighting with the mesh faces
-DISPLAY_OFFSET_STEP_M = 0.004  # extra visual-only offset per cable so bundled cables stay visible
+BAR_COLOR = "#2a78d6"
+SURFACE = "#fcfcfb"
+GRID = "#e6e5e0"
+TEXT = "#0b0b0b"
+TEXT_SECONDARY = "#52514e"
 
-CAMERA = {"eye": {"x": -0.9, "y": -0.8, "z": -1.5}, "up": {"x": 0, "y": 0, "z": 1}}
-
-
-def _mesh_trace(mesh: trimesh.Trimesh, color: str, opacity: float, name: str) -> go.Mesh3d:
-    """Plotly Mesh3d trace for a trimesh object."""
-    v, f = mesh.vertices, mesh.faces
-    return go.Mesh3d(
-        x=v[:, 0], y=v[:, 1], z=v[:, 2], i=f[:, 0], j=f[:, 1], k=f[:, 2],
-        color=color, opacity=opacity, name=name, showlegend=True, hoverinfo="name",
-        flatshading=True,
-    )
-
-
-def offset_inward(points: np.ndarray, offset: float) -> np.ndarray:
-    """Shift points radially towards the cylinder axis (x axis) by `offset`."""
-    radial = points.copy()
-    radial[:, 0] = 0.0
-    norm = np.linalg.norm(radial, axis=1, keepdims=True)
-    return points - offset * radial / np.maximum(norm, 1e-9)
-
-
-SCENE_AXES: dict[str, dict] = {"xaxis": {"title": "x [m]"}, "yaxis": {"title": "y [m]"}, "zaxis": {"title": "z [m]"}}
-
-
-def context_traces(mesh: trimesh.Trimesh, volumes: list[ForbiddenVolume], scene: str = "scene",
-                   showlegend: bool = True) -> list[go.Mesh3d]:
-    """Hull and keep-out volume traces shared by every route view."""
-    traces = [_mesh_trace(mesh, HULL_COLOR, 0.18, "Gövde")]
-    traces += [_mesh_trace(vol.to_mesh(), FORBIDDEN_COLOR, 0.45, f"Yasak: {vol.name}") for vol in volumes]
-    for t in traces:
-        t.update(scene=scene, showlegend=showlegend)
-    return traces
-
-
-def route_traces(mesh: trimesh.Trimesh, cables: list[Cable], routes: dict[str, list[int]],
-                 scene: str = "scene", showlegend: bool = True) -> list[go.Scatter3d]:
-    """One line trace plus one terminal-marker trace per cable, coloured by EMC class."""
-    pos = np.asarray(mesh.vertices)
-    traces: list[go.Scatter3d] = []
-    shown: set[str] = set()
-    for k, cable in enumerate(cables):
-        pts = offset_inward(pos[routes[cable.name]], DISPLAY_OFFSET_BASE_M + DISPLAY_OFFSET_STEP_M * k)
-        color = CLASS_COLORS[cable.emc_class]
-        traces.append(
-            go.Scatter3d(
-                x=pts[:, 0], y=pts[:, 1], z=pts[:, 2], mode="lines", scene=scene,
-                line={"color": color, "width": 5},
-                name=cable.emc_class, legendgroup=cable.emc_class,
-                showlegend=showlegend and cable.emc_class not in shown,
-                hovertext=f"{cable.name} ({cable.emc_class})", hoverinfo="text",
-            )
-        )
-        shown.add(cable.emc_class)
-        ends = pts[[0, -1]]
-        traces.append(
-            go.Scatter3d(
-                x=ends[:, 0], y=ends[:, 1], z=ends[:, 2], mode="markers", scene=scene,
-                marker={"size": 4, "color": color, "line": {"color": "#ffffff", "width": 1}},
-                legendgroup=cable.emc_class, showlegend=False,
-                hovertext=[f"{cable.name} başlangıç", f"{cable.name} bitiş"], hoverinfo="text",
-            )
-        )
-    return traces
-
-
-def route_figure(mesh: trimesh.Trimesh, volumes: list[ForbiddenVolume], cables: list[Cable],
-                 routes: dict[str, list[int]], title: str) -> go.Figure:
-    """3D figure of one routing solution (hull, keep-out volumes, cables)."""
-    fig = go.Figure(context_traces(mesh, volumes) + route_traces(mesh, cables, routes))
-    fig.update_layout(
-        title={"text": title, "x": 0.02},
-        scene={"aspectmode": "data", "camera": CAMERA, **SCENE_AXES},
-        legend={"x": 0.99, "y": 0.95, "xanchor": "right", "bgcolor": "rgba(252,252,251,0.85)"},
-        margin={"l": 0, "r": 0, "t": 40, "b": 0},
-        paper_bgcolor="#fcfcfb",
-    )
-    return fig
-
-
-def plot_routes(
-    mesh: trimesh.Trimesh,
-    volumes: list[ForbiddenVolume],
-    cables: list[Cable],
-    routes: dict[str, list[int]],
-    title: str,
-    png_path: Path,
-) -> None:
-    """Write a static PNG of one routing solution."""
-    fig = route_figure(mesh, volumes, cables, routes, title)
-    fig.write_image(png_path, width=1200, height=800, scale=1)
+SHORT_LABELS: dict[str, str] = {
+    "baseline": "a) Baseline",
+    "bundled": "b) Demetleme",
+    "emc_aware": "c) EMC duyarlı",
+    "lagrangian": "d) Lagrange",
+    "integrated": "e) Bütünleşik",
+}
 
 
 def plot_convergence(history: list[dict[str, float]], png_path: Path) -> None:
@@ -123,12 +40,46 @@ def plot_convergence(history: list[dict[str, float]], png_path: Path) -> None:
     last = history[-1]
     gap = (last["upper_bound"] - last["lower_bound"]) / last["upper_bound"] * 100
     fig.update_layout(
-        title={"text": f"Lagrange gevşetmesi yakınsaması — son fark %{gap:.2f}", "x": 0.02},
-        xaxis={"title": "İterasyon", "gridcolor": "#e6e5e0"},
-        yaxis={"title": "Toplam kablo uzunluğu [m]", "gridcolor": "#e6e5e0"},
-        plot_bgcolor="#fcfcfb", paper_bgcolor="#fcfcfb",
+        title={"text": f"Lagrange gevşetmesi yakınsaması — son fark %{gap:.3f}", "x": 0.02},
+        xaxis={"title": "İterasyon", "gridcolor": GRID},
+        yaxis={"title": "Toplam kablo uzunluğu [m]", "gridcolor": GRID},
+        plot_bgcolor=SURFACE, paper_bgcolor=SURFACE,
         legend={"x": 0.98, "y": 0.05, "xanchor": "right", "yanchor": "bottom"},
         hovermode="x unified",
         margin={"l": 70, "r": 20, "t": 50, "b": 60},
     )
     fig.write_image(png_path, width=900, height=500, scale=1)
+
+
+def plot_metrics_chart(rows: list[dict[str, object]], png_path: Path) -> None:
+    """Three bar panels: bundling ratio, EMC violation points and capacity violations per method."""
+    labels = [SHORT_LABELS.get(str(r["method"]), str(r["label"])) for r in rows]
+    ratio = [float(r["bundling_ratio"]) for r in rows]
+    emc = [int(r["emc_points"]) for r in rows]
+    cap = [int(r["capacity_edges"]) for r in rows]
+    fig = make_subplots(
+        rows=1, cols=3, horizontal_spacing=0.1,
+        subplot_titles=("Demetlenme oranı  (yüksek = daha çok ortak yol)",
+                        "EMC ihlali [nokta]  (düşük = iyi)",
+                        "Kapasite ihlali [ayrıt]  (düşük = iyi)"),
+    )
+    common = {"orientation": "h", "marker": {"color": BAR_COLOR, "cornerradius": 4},
+              "textposition": "outside", "cliponaxis": False, "showlegend": False,
+              "textfont": {"color": TEXT, "size": 15}}
+    fig.add_trace(go.Bar(y=labels, x=ratio, text=[f"{v:.3f}" for v in ratio], **common), row=1, col=1)
+    fig.add_trace(go.Bar(y=labels, x=emc, text=[f"{v}" for v in emc], **common), row=1, col=2)
+    fig.add_trace(go.Bar(y=labels, x=cap, text=[f"{v}" for v in cap], **common), row=1, col=3)
+    fig.update_yaxes(autorange="reversed", tickfont={"size": 15, "color": TEXT}, ticklabelstandoff=12)
+    fig.update_xaxes(gridcolor=GRID, zeroline=True, zerolinecolor="#c3c2b7",
+                     tickfont={"color": TEXT_SECONDARY, "size": 13})
+    fig.update_xaxes(range=[0, 1.0], row=1, col=1)
+    fig.update_xaxes(range=[0, max(emc) * 1.2 if max(emc) else 1], row=1, col=2)
+    fig.update_xaxes(range=[0, max(cap) * 1.2 if max(cap) else 1], row=1, col=3)
+    fig.update_layout(
+        title={"text": f"Yöntemlerin karşılaştırması (aynı senaryo, {len(rows)} yöntem)", "x": 0.02,
+               "font": {"size": 20, "color": TEXT}},
+        bargap=0.35, plot_bgcolor=SURFACE, paper_bgcolor=SURFACE,
+        margin={"l": 20, "r": 40, "t": 90, "b": 40},
+    )
+    fig.update_annotations(font={"size": 16, "color": TEXT_SECONDARY})
+    fig.write_image(png_path, width=1800, height=560, scale=1)

@@ -5,14 +5,14 @@ Yöntem                                   | Toplam uzunluk [m] | Benzersiz uzunl
 -----------------------------------------+--------------------+-----------------------+------------------+--------------------+----------------+--------------------+----------------------------+-------------------------+---------
 a) Baseline (bağımsız Dijkstra)          |              61.66 |                 51.65 |            0.162 |                980 |              0 |                  0 |                          0 |                      20 |     0.00
 b) Demetleme                             |              71.84 |                 17.80 |            0.752 |               5660 |             15 |                  0 |                          0 |                     116 |     0.01
-c) EMC duyarlı demetleme                 |              66.18 |                 35.22 |            0.468 |                  0 |              8 |                  0 |                          0 |                      35 |     0.13
-d) Lagrange gevşetmesi (K=2)             |              61.76 |                 53.80 |            0.129 |                887 |              0 |                  0 |                          0 |                       0 |     0.93
-e) Bütünleşik (EMC + kapasite + bükülme) |              66.05 |                 40.80 |            0.382 |                  0 |              0 |                  0 |                          0 |                       0 |     0.10
+c) EMC duyarlı demetleme                 |              66.18 |                 35.22 |            0.468 |                  0 |              8 |                  0 |                          0 |                      35 |     0.12
+d) Lagrange gevşetmesi (K=2)             |              61.76 |                 53.80 |            0.129 |                887 |              0 |                  0 |                          0 |                       0 |     0.91
+e) Bütünleşik (EMC + kapasite + bükülme) |              66.05 |                 40.80 |            0.382 |                  0 |              0 |                  0 |                          0 |                       0 |     0.09
 
 Lagrange: 60 iterasyon, alt sınır 61.7624 m, üst sınır 61.7639 m, fark 0.0014 m (%0.002)
 Güvenlik payı olmadan kurulan çizgede baseline: 69 boşluk payı ihlali noktası.
 
-Sağlamlık testi (20 deneme / deney, 36.8 s):
+Sağlamlık testi (20 deneme / deney, 40.5 s):
 | Deney | Yöntem | EMC ihlali 0 olan | EMC ort. / en çok [nokta] | Kapasite ort. / en çok [ayrıt] | Bükülme en çok | Tüm denetimler temiz |
 |:---|:---|---:|---:|---:|---:|---:|
 | Rastgele sıra | c) tek geçiş | 6/20 | 24.1 / 72 | 59.1 / 116 | 13 | 0/20 |
@@ -21,5 +21,6 @@ Sağlamlık testi (20 deneme / deney, 36.8 s):
 | Rastgele sıra + uç nokta sapması | c) tek geçiş | 7/20 | 15.8 / 55 | 57.5 / 108 | 10 | 0/20 |
 | Rastgele sıra + uç nokta sapması | c) + söküp yeniden rotalama | 20/20 | 0.0 / 0 | 52.4 / 110 | 16 | 0/20 |
 | Rastgele sıra + uç nokta sapması | e) Bütünleşik | 20/20 | 0.0 / 0 | 0.0 / 0 | 0 | 20/20 |
+3B görseller etkileşimli sayfadan yakalandı (8 dosya, 21.9 s).
 
-Çıktılar: outputs/, docs/  (toplam süre 73.7 s)
+Çıktılar: outputs/, docs/  (toplam süre 64.9 s)
