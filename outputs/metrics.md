@@ -1,11 +1,13 @@
 # Metrikler
 
-| Yöntem | Toplam uzunluk [m] | Benzersiz uzunluk [m] | Demetlenme oranı | EMC ihlali [nokta] | Bükülme ihlali | Yasak hacim ihlali | Kapasite ihlali [ayrıt] | Süre [s] |
-|:---|---:|---:|---:|---:|---:|---:|---:|---:|
-| a) Baseline (bağımsız Dijkstra) | 61.23 | 52.32 | 0.145 | 952 | 0 | 0 | 17 | 0.01 |
-| b) Demetleme | 71.36 | 17.72 | 0.752 | 5572 | 15 | 0 | 116 | 0.01 |
-| c) EMC duyarlı demetleme | 67.17 | 34.56 | 0.486 | 0 | 10 | 0 | 50 | 0.05 |
-| d) Lagrange gevşetmesi (K=2) | 61.27 | 52.50 | 0.143 | 962 | 0 | 0 | 0 | 1.34 |
+| Yöntem | Toplam uzunluk [m] | Benzersiz uzunluk [m] | Demetlenme oranı | EMC ihlali [nokta] | Bükülme ihlali | Yasak hacim ihlali | Boşluk payı ihlali [nokta] | Kapasite ihlali [ayrıt] | Süre [s] |
+|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| a) Baseline (bağımsız Dijkstra) | 61.66 | 51.65 | 0.162 | 980 | 0 | 0 | 0 | 20 | 0.00 |
+| b) Demetleme | 71.84 | 17.80 | 0.752 | 5660 | 15 | 0 | 0 | 116 | 0.01 |
+| c) EMC duyarlı demetleme | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.13 |
+| d) Lagrange gevşetmesi (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.93 |
+| e) Bütünleşik (EMC + kapasite + bükülme) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.10 |
 
-- Kapasite K = 2 kablo/ayrıt, minimum bükülme yarıçapı = 0.1 m, EMC ve yasak hacim denetimleri 0.05 m örnekleme ile.
-- Lagrange: 56 iterasyon, alt sınır 61.27 m, üst sınır 61.27 m.
+- Kapasite K = 2 kablo/ayrıt, minimum bükülme yarıçapı = 0.1 m, yasak hacim güvenlik payı = 0.05 m; EMC, yasak hacim ve boşluk denetimleri 0.05 m örnekleme ile.
+- Lagrange: 60 iterasyon, alt sınır 61.7624 m, üst sınır 61.7639 m, fark 0.0014 m (%0.002).
+- Güvenlik payı olmadan kurulan çizgede baseline 69 boşluk payı ihlali noktası üretir (boşluk denetiminin çalıştığını gösterir).

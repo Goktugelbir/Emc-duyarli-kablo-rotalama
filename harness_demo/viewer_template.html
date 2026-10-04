@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kablo Demeti 3B</title>
+<meta name="description" content="Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle EMC duyarlı rotalanması — etkileşimli 3B görünüm.">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/examples/jsm/"
+} }
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --surface: #fcfcfb; --surface-2: #f1f0ec; --border: #dcdbd5;
+    --text: #0b0b0b; --text-2: #52514e; --accent: #2a78d6; --accent-text: #ffffff;
+    --good: #1a7f4b; --bad: #b5001f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #121416; --surface-2: #1c1f23; --border: #2e3237;
+      --text: #ececea; --text-2: #a4a7ab; --accent: #4b8fe0; --accent-text: #ffffff;
+      --good: #4cc38a; --bad: #ff6b6b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #121416; --surface-2: #1c1f23; --border: #2e3237;
+    --text: #ececea; --text-2: #a4a7ab; --accent: #4b8fe0; --accent-text: #ffffff;
+    --good: #4cc38a; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--surface); color: var(--text); }
+  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 4px; text-wrap: balance; }
+  p.lead { margin: 0 0 18px; color: var(--text-2); max-width: 75ch; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button { font: inherit; color: inherit; }
+  .tabs button { padding: 8px 14px; border-radius: 8px; cursor: pointer;
+                 border: 1px solid var(--border); background: var(--surface); }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button:focus-visible, label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--surface-2); border-radius: 8px; padding: 9px 12px; min-width: 0; }
+  .stat .k { font-size: .78rem; color: var(--text-2); }
+  .stat .v { font-size: 1.2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .v.ok { color: var(--good); } .stat .v.ng { color: var(--bad); }
+
+  .viewer { position: relative; height: min(74vh, 760px); min-height: 420px; border-radius: 10px; overflow: hidden;
+            border: 1px solid var(--border);
+            background: radial-gradient(ellipse at 50% 35%, #353c45 0%, #1b1f24 55%, #0e1013 100%); }
+  .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .labels { position: absolute; inset: 0; pointer-events: none; }
+  .lbl { font: 600 11px/1.2 system-ui, sans-serif; color: #f4f4f2; background: rgba(14,16,19,.72);
+         padding: 2px 6px; border-radius: 4px; white-space: nowrap; border-left: 3px solid var(--c, #9a9890); }
+  .lbl.ko { --c: #e34948; } .lbl.eq { --c: #c9ced4; font-weight: 500; }
+  .hud { position: absolute; color: #ececea; font-size: 12.5px; pointer-events: none; }
+  .hud > * { pointer-events: auto; }
+  .legend { left: 12px; bottom: 12px; background: rgba(14,16,19,.7); border-radius: 8px; padding: 8px 10px;
+            display: grid; gap: 3px; }
+  .legend span.sw { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-right: 6px;
+                    vertical-align: middle; }
+  .legend span.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 9px 0 5px;
+                     vertical-align: middle; }
+  .playbar { right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
+  .playbar button { background: #f4f4f2; color: #0b0b0b; border: 0; border-radius: 8px; padding: 8px 14px;
+                    cursor: pointer; font-weight: 600; }
+  .status { left: 12px; top: 12px; background: rgba(14,16,19,.7); border-radius: 8px; padding: 6px 10px;
+            font-variant-numeric: tabular-nums; }
+  .status:empty { display: none; }
+  .tip { position: absolute; pointer-events: none; background: rgba(14,16,19,.88); color: #f4f4f2;
+         font-size: 12.5px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; transform: translate(12px, 12px);
+         display: none; z-index: 3; }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: #d8d8d4; font-size: 14px;
+             text-align: center; padding: 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between;
+              margin-top: 10px; }
+  .chips, .views { display: flex; flex-wrap: wrap; gap: 6px; }
+  label.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+               border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; font-size: .85rem;
+               user-select: none; }
+  label.chip input { margin: 0; accent-color: var(--accent); }
+  .views button { padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
+                  cursor: pointer; font-size: .85rem; }
+  .views .lbl-t { font-size: .8rem; color: var(--text-2); align-self: center; margin-right: 2px; }
+  .selinfo { margin-top: 10px; font-size: .9rem; color: var(--text-2); min-height: 1.5em; }
+  footer { margin-top: 14px; font-size: .84rem; color: var(--text-2); max-width: 95ch; }
+  code { font-size: .92em; }
+  @media (max-width: 640px) {
+    .viewer { height: 62vh; min-height: 360px; }
+    .legend { font-size: 11px; padding: 6px 8px; }
+    .playbar { right: 8px; bottom: 8px; } .legend { left: 8px; bottom: 8px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kablo demeti rotalama — etkileşimli 3B görünüm</h1>
+  <p class="lead">Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle rotalanması. Sürükleyerek döndürün,
+     tekerlekle yakınlaşın, bir kablonun üzerine gelince bilgisini görün, tıklayınca EMC ayrım zarfını açın.</p>
+  <div class="tabs" role="tablist" id="tabs" aria-label="Rotalama yöntemi"></div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="viewer" id="viewer">
+    <div class="loading" id="loading">3B görünüm yükleniyor…</div>
+    <div class="hud status" id="status" aria-live="polite"></div>
+    <div class="hud legend" id="legend"></div>
+    <div class="hud playbar"><button type="button" id="play">▶ Rotalamayı oynat</button></div>
+    <div class="tip" id="tip"></div>
+  </div>
+  <div class="controls">
+    <div class="chips" id="chips"></div>
+    <div class="views" id="views"><span class="lbl-t">Görünüm:</span></div>
+  </div>
+  <div class="selinfo" id="selinfo"></div>
+  <footer>
+    Tüm değerler temsilîdir ve <code>python main.py</code> çıktısından üretilmiştir; gerçek uçak verisi kullanılmamıştır.
+    Kablo güzergâhları, ihlal noktaları ve metrikler doğrudan rotalama ve bağımsız denetim sonuçlarıdır.
+    Kesikli kırmızı çizgiler yasak hacimlerin güvenlik payıyla büyütülmüş sınırıdır.
+    Gerçekçilik için eklenen öğeler — frame/stringer yapısı, zemin, kelepçeler, konnektörler, ekipman rafları,
+    kabloların yüzeyden ~10 cm kaldırılıp demet içinde yan yana dizilmesi ve köşelerinin yumuşatılması — yalnızca
+    görseldir; denetimlere ve metriklere girmez. Kablo kalınlıkları temsilîdir.
+  </footer>
+</main>
+
+<script id="data" type="application/json">__DATA_JSON__</script>
+<script>
+  // Shown when the three.js module cannot be loaded (offline or blocked CDN).
+  setTimeout(() => {
+    if (!window.__viewerReady) document.getElementById("loading").textContent =
+      "3B kütüphanesi (three.js) yüklenemedi. Bu sayfa internet bağlantısı gerektirir.";
+  }, 12000);
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+const D = JSON.parse(document.getElementById("data").textContent);
+const R = D.radius, LEN = D.length, V = D.mesh.v;
+const LIFT = 0.105;          // visual standoff of the bundle centreline off the skin [m]
+const SLOT = 0.017;          // spacing of cables inside a bundle [m]
+const CABLE_R = { power: 0.0075, signal: 0.0055, data: 0.005 };
+const CLAMP_STEP = 0.32;     // visual clamp spacing along bundles [m]
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const CLASS_TR = { power: "güç", signal: "sinyal", data: "veri" };
+
+const vtx = i => new THREE.Vector3(V[3 * i], V[3 * i + 1], V[3 * i + 2]);
+const inward = p => new THREE.Vector3(0, -p.y, -p.z).normalize();   // towards the fuselage axis
+const thetaOf = p => Math.atan2(p.z, p.y);
+const sep = (a, b) => D.separation[a + "|" + b] || 0;
+
+// ---------------------------------------------------------------- renderer, scene, camera
+const host = document.getElementById("viewer");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+host.prepend(renderer.domElement);
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.domElement.className = "labels";
+host.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.02, 200);
+camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 0.3;
+controls.maxDistance = 25;
+controls.autoRotateSpeed = 0.8;
+
+const CENTER = new THREE.Vector3(LEN / 2, 0, 1.1);
+const hemi = new THREE.HemisphereLight(0xe9eef4, 0x4a453f, 0.75);
+hemi.position.set(0, 0, 1);
+scene.add(hemi);
+// Key light shines from inside/below onto the interior of the arch so cables and frames cast shadows on the skin.
+const key = new THREE.DirectionalLight(0xfff3e2, 2.3);
+key.position.copy(CENTER).add(new THREE.Vector3(-2.4, -1.8, -4.6));
+key.target.position.copy(CENTER);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -4.6, right: 4.6, top: 4.6, bottom: -4.6, near: 0.5, far: 16 });
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.015;
+scene.add(key, key.target);
+const fill = new THREE.DirectionalLight(0xdbe6ff, 0.9);
+fill.position.copy(CENTER).add(new THREE.Vector3(3, 2.6, -2.2));
+fill.target.position.copy(CENTER);
+scene.add(fill, fill.target);
+const rim = new THREE.DirectionalLight(0xffffff, 0.6);
+rim.position.copy(CENTER).add(new THREE.Vector3(-6, 0, 0.4));
+rim.target.position.copy(CENTER);
+scene.add(rim, rim.target);
+
+// ---------------------------------------------------------------- materials
+const M = {
+  primer: new THREE.MeshStandardMaterial({ color: 0x8a9c6c, roughness: 0.62, metalness: 0.2 }),
+  skinOut: new THREE.MeshPhysicalMaterial({ color: 0xd5d9de, metalness: 0.6, roughness: 0.3, transparent: true,
+                                            opacity: 0.12, depthWrite: false }),
+  frame: new THREE.MeshStandardMaterial({ color: 0x77895c, roughness: 0.55, metalness: 0.3 }),
+  alu: new THREE.MeshStandardMaterial({ color: 0xb9bec4, roughness: 0.32, metalness: 0.85 }),
+  floor: new THREE.MeshStandardMaterial({ color: 0x3d434b, roughness: 0.85, metalness: 0.05 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x2e3237, roughness: 0.45, metalness: 0.6 }),
+  box: new THREE.MeshStandardMaterial({ color: 0x3a4047, roughness: 0.55, metalness: 0.45 }),
+  boxFace: new THREE.MeshStandardMaterial({ color: 0x23272c, roughness: 0.4, metalness: 0.5 }),
+  clamp: new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.5, metalness: 0.3 }),
+  bracket: new THREE.MeshStandardMaterial({ color: 0x9aa1a8, roughness: 0.38, metalness: 0.8 }),
+  sleeve: new THREE.MeshStandardMaterial({ color: 0xf2f1ec, roughness: 0.6 }),
+  pipe: new THREE.MeshPhysicalMaterial({ color: 0xc4c8cd, metalness: 0.95, roughness: 0.22 }),
+  tape: new THREE.MeshStandardMaterial({ color: 0xb8322a, roughness: 0.6 }),
+  warn: new THREE.MeshStandardMaterial({ color: 0xe0aa12, roughness: 0.45, metalness: 0.25 }),
+  panel: new THREE.MeshStandardMaterial({ color: 0xaab1b7, roughness: 0.36, metalness: 0.7, side: THREE.DoubleSide }),
+  koFill: new THREE.MeshBasicMaterial({ color: 0xe34948, transparent: true, opacity: 0.1, depthWrite: false,
+                                        side: THREE.DoubleSide }),
+  koLine: new THREE.LineBasicMaterial({ color: 0xff6a62, transparent: true, opacity: 0.8 }),
+  koWire: new THREE.LineBasicMaterial({ color: 0xff6a62, transparent: true, opacity: 0.22 }),
+  koMargin: new THREE.LineDashedMaterial({ color: 0xff8a80, dashSize: 0.04, gapSize: 0.03, transparent: true,
+                                           opacity: 0.55 }),
+  viol: new THREE.MeshBasicMaterial({ color: 0xff2a3d }),
+};
+function shadowed(o, cast = true, receive = true) { o.castShadow = cast; o.receiveShadow = receive; return o; }
+
+// Maps a shape drawn in the (y, z) cross-section plane and extruded along its local z onto the fuselage x axis.
+const SECTION_TO_WORLD = new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1);
+function arcSection(r0, r1, a0, a1, depth, x0) {
+  const s = new THREE.Shape();
+  s.absarc(0, 0, r1, a0, a1, false);
+  s.absarc(0, 0, r0, a1, a0, true);
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 120 });
+  g.applyMatrix4(SECTION_TO_WORLD);
+  g.translate(x0, 0, 0);
+  return g;
+}
+// Local frame at a point: x = along the fuselage, y = circumferential, z = towards the axis.
+function surfaceBasis(theta) {
+  return new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, -Math.sin(theta), Math.cos(theta)), new THREE.Vector3(0, -Math.cos(theta), -Math.sin(theta)));
+}
+const labels = new THREE.Group();
+scene.add(labels);
+function addLabel(text, pos, cls = "", color = null) {
+  const el = document.createElement("div");
+  el.className = "lbl " + cls;
+  el.textContent = text;
+  if (color) el.style.setProperty("--c", color);
+  const o = new CSS2DObject(el);
+  o.position.copy(pos);
+  labels.add(o);
+  return o;
+}
+
+// ---------------------------------------------------------------- fuselage skin
+const skinGeo = new THREE.BufferGeometry();
+skinGeo.setAttribute("position", new THREE.Float32BufferAttribute(V, 3));
+skinGeo.setIndex(D.mesh.f);
+skinGeo.computeVertexNormals();
+let outwardScore = 0;
+const nrm = skinGeo.attributes.normal;
+for (let i = 0; i < nrm.count; i += 37) outwardScore += nrm.getY(i) * V[3 * i + 1] + nrm.getZ(i) * V[3 * i + 2];
+const outwardFront = outwardScore > 0;
+M.primer.side = outwardFront ? THREE.BackSide : THREE.FrontSide;   // interior: zinc-chromate style primer
+M.skinOut.side = outwardFront ? THREE.FrontSide : THREE.BackSide;  // exterior: translucent bare aluminium
+const skin = new THREE.Group();
+skin.add(shadowed(new THREE.Mesh(skinGeo, M.primer), false, true));
+skin.add(new THREE.Mesh(skinGeo, M.skinOut));
+scene.add(skin);
+
+// ---------------------------------------------------------------- structure: frames, stringers
+const structure = new THREE.Group();
+const FRAME_H = 0.064;
+const frameWeb = arcSection(R - FRAME_H, R - 0.002, 0, Math.PI, 0.012, -0.006);
+const frameCap = arcSection(R - FRAME_H - 0.004, R - FRAME_H, 0, Math.PI, 0.05, -0.025);
+for (let x = 0; x <= LEN + 1e-6; x += 0.5) {
+  for (const g of [frameWeb, frameCap]) {
+    const m = shadowed(new THREE.Mesh(g, M.frame));
+    m.position.x = x;
+    structure.add(m);
+  }
+}
+const stringerGeo = new THREE.BoxGeometry(LEN, 0.01, 0.026);
+for (let deg = 7.5; deg < 180; deg += 15) {
+  const t = THREE.MathUtils.degToRad(deg), r = R - 0.014;
+  const m = shadowed(new THREE.Mesh(stringerGeo, M.frame));
+  m.position.set(LEN / 2, r * Math.cos(t), r * Math.sin(t));
+  m.rotation.x = t - Math.PI / 2;
+  structure.add(m);
+}
+scene.add(structure);
+
+// ---------------------------------------------------------------- floor: panels, seat tracks, beams
+const floor = new THREE.Group();
+const floorW = 2 * R - 0.04;
+const panel = shadowed(new THREE.Mesh(new THREE.BoxGeometry(LEN, floorW, 0.018), M.floor), false, true);
+panel.position.set(LEN / 2, 0, -0.009);
+floor.add(panel);
+for (const y of [-1.25, -0.75, 0.75, 1.25]) {
+  const rail = shadowed(new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.028, 0.012), M.alu), false, true);
+  rail.position.set(LEN / 2, y, 0.006);
+  floor.add(rail);
+}
+for (let x = 0; x <= LEN + 1e-6; x += 0.5) {
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.035, floorW, 0.12), M.frame);
+  beam.position.set(x, 0, -0.08);
+  floor.add(beam);
+}
+scene.add(floor);
+
+// ---------------------------------------------------------------- keep-out volumes and the hardware inside them
+const keepout = new THREE.Group();
+const props = new THREE.Group();
+let actuatorArm = null;
+for (const vol of D.volumes) {
+  let center;
+  if (vol.kind === "box") {
+    const lo = new THREE.Vector3(...vol.lo), hi = new THREE.Vector3(...vol.hi);
+    const size = hi.clone().sub(lo);
+    center = lo.clone().add(hi).multiplyScalar(0.5);
+    const g = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const fillM = new THREE.Mesh(g, M.koFill);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(g), M.koLine);
+    fillM.position.copy(center); edges.position.copy(center);
+    keepout.add(fillM, edges);
+    if (D.clearance > 0) {   // clearance envelope used by the routing graph
+      const c2 = D.clearance * 2;
+      const margin = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x + c2, size.y + c2, size.z + c2)), M.koMargin);
+      margin.computeLineDistances();
+      margin.position.copy(center);
+      keepout.add(margin);
+    }
+    if (vol.prop === "pipe") buildPipe(lo, hi);
+    if (vol.prop === "panel") buildAccessPanel(lo, hi);
+  } else {
+    center = new THREE.Vector3(...vol.center);
+    const fillM = new THREE.Mesh(new THREE.SphereGeometry(vol.radius, 48, 24), M.koFill);
+    const wire = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(vol.radius, 18, 10)), M.koWire);
+    fillM.position.copy(center); wire.position.copy(center);
+    keepout.add(fillM, wire);
+    if (D.clearance > 0) {
+      const ring = new THREE.EllipseCurve(0, 0, vol.radius + D.clearance, vol.radius + D.clearance, 0, 2 * Math.PI);
+      for (const rot of [[0, 0, 0], [Math.PI / 2, 0, 0], [0, Math.PI / 2, 0]]) {
+        const l = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.getPoints(96)), M.koMargin);
+        l.computeLineDistances();
+        l.rotation.set(...rot);
+        l.position.copy(center);
+        keepout.add(l);
+      }
+    }
+    if (vol.prop === "actuator") buildActuator(center, vol.radius);
+  }
+  addLabel("Yasak: " + vol.name, center.clone().add(inward(center).multiplyScalar(0.12)), "ko");
+}
+scene.add(keepout, props);
+
+function buildPipe(lo, hi) {
+  const r = 0.045, yc = (lo.y + hi.y) / 2;
+  const zc = Math.min((lo.z + hi.z) / 2, Math.sqrt(R * R - yc * yc) - 0.17);
+  const len = hi.x - lo.x - 0.04, xc = (lo.x + hi.x) / 2;
+  const along = g => { g.rotateZ(-Math.PI / 2); return g; };
+  const tube = shadowed(new THREE.Mesh(along(new THREE.CylinderGeometry(r, r, len, 40)), M.pipe));
+  tube.position.set(xc, yc, zc);
+  props.add(tube);
+  for (const x of [lo.x + 0.04, hi.x - 0.04, xc]) {
+    const flange = shadowed(new THREE.Mesh(along(new THREE.CylinderGeometry(r * 1.45, r * 1.45, 0.03, 40)), M.pipe));
+    flange.position.set(x, yc, zc);
+    props.add(flange);
+  }
+  for (const x of [lo.x + 0.4, xc - 0.45, xc + 0.45, hi.x - 0.4]) {
+    const band = new THREE.Mesh(along(new THREE.CylinderGeometry(r * 1.02, r * 1.02, 0.06, 40)), M.tape);
+    band.position.set(x, yc, zc);
+    props.add(band);
+  }
+  for (const x of [lo.x + 0.3, xc, hi.x - 0.3]) {           // support brackets up to the crown
+    const top = Math.sqrt(R * R - yc * yc) - 0.01, h = top - (zc + r);
+    const b = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, h), M.bracket));
+    b.position.set(x, yc, zc + r + h / 2);
+    props.add(b);
+  }
+}
+
+function buildAccessPanel(lo, hi) {
+  const inBox = t => { const y = R * Math.cos(t), z = R * Math.sin(t);
+                       return y > lo.y && y < hi.y && z > lo.z && z < hi.z; };
+  let t0 = null, t1 = null;
+  for (let t = 0; t <= Math.PI; t += Math.PI / 720) if (inBox(t)) { if (t0 === null) t0 = t; t1 = t; }
+  if (t0 === null) return;
+  const r = R - 0.006, nx = 6, nt = 18, pos = [], idx = [];
+  for (let i = 0; i <= nx; i++) for (let j = 0; j <= nt; j++) {
+    const x = lo.x + (hi.x - lo.x) * i / nx, t = t0 + (t1 - t0) * j / nt;
+    pos.push(x, r * Math.cos(t), r * Math.sin(t));
+  }
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nt; j++) {
+    const a = i * (nt + 1) + j, b = a + nt + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  props.add(shadowed(new THREE.Mesh(g, M.panel), false, true));
+  // Fasteners along the panel border.
+  const pts = [];
+  const rr = R - 0.009, step = 0.06;
+  for (let x = lo.x + 0.02; x <= hi.x - 0.02; x += step) for (const t of [t0 + 0.012, t1 - 0.012]) pts.push([x, t]);
+  for (let t = t0 + 0.012; t <= t1 - 0.012; t += step / R) for (const x of [lo.x + 0.02, hi.x - 0.02]) pts.push([x, t]);
+  const fast = new THREE.InstancedMesh(new THREE.SphereGeometry(0.006, 8, 6), M.dark, pts.length);
+  const mtx = new THREE.Matrix4();
+  pts.forEach(([x, t], k) => fast.setMatrixAt(k, mtx.makeTranslation(x, rr * Math.cos(t), rr * Math.sin(t))));
+  props.add(fast);
+  // Yellow border marking.
+  const border = [];
+  for (let j = 0; j <= nt; j++) border.push(new THREE.Vector3(lo.x, 0, 0).setY(rr * Math.cos(t0 + (t1 - t0) * j / nt)).setZ(rr * Math.sin(t0 + (t1 - t0) * j / nt)));
+  for (let j = nt; j >= 0; j--) border.push(new THREE.Vector3(hi.x, rr * Math.cos(t0 + (t1 - t0) * j / nt), rr * Math.sin(t0 + (t1 - t0) * j / nt)));
+  border.push(border[0].clone());
+  props.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(border), new THREE.LineBasicMaterial({ color: 0xf2c230 })));
+}
+
+function buildActuator(c, envR) {
+  const n = inward(c), basis = surfaceBasis(thetaOf(c));
+  const mount = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.025), M.bracket));
+  mount.quaternion.setFromRotationMatrix(basis);
+  mount.position.copy(c).addScaledVector(n, 0.014);
+  props.add(mount);
+  const bodyLen = 0.26;
+  const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, bodyLen, 32), M.dark));
+  body.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+  body.position.copy(c).addScaledVector(n, 0.03 + bodyLen / 2);
+  props.add(body);
+  const hinge = c.clone().addScaledVector(n, 0.03 + bodyLen + 0.02);
+  const pin = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 24).rotateZ(-Math.PI / 2), M.alu));
+  pin.position.copy(hinge);
+  props.add(pin);
+  // The arm swings about the fuselage axis direction, sweeping inside the keep-out envelope.
+  actuatorArm = new THREE.Group();
+  actuatorArm.position.copy(hinge);
+  const armLen = Math.min(0.17, envR - 0.32);
+  const arm = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, armLen), M.warn));
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+  arm.quaternion.copy(q);
+  arm.position.copy(n).multiplyScalar(armLen / 2);
+  const rod = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, armLen * 0.9, 16), M.pipe));
+  rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+  rod.position.copy(n).multiplyScalar(armLen / 2).add(new THREE.Vector3(0.04, 0, 0));
+  actuatorArm.add(arm, rod);
+  props.add(actuatorArm);
+}
+
+// ---------------------------------------------------------------- equipment racks at the cable terminals
+const equipment = new THREE.Group();
+{
+  const groups = {};
+  for (const c of D.cables) for (const [node, end] of [[c.start, "s"], [c.end, "e"]]) {
+    const p = vtx(node);
+    const key = (p.x < LEN / 2 ? "A" : "F") + (p.y >= 0 ? "R" : "L");
+    (groups[key] ||= []).push(p);
+  }
+  const names = { AR: "Arka raf (sağ)", AL: "Arka raf (sol)", FR: "Ön panel (sağ)", FL: "Ön panel (sol)" };
+  for (const [key, pts] of Object.entries(groups)) {
+    const ths = pts.map(thetaOf), aft = key[0] === "A";
+    const t0 = Math.min(...ths) - 0.07, t1 = Math.max(...ths) + 0.07;
+    const xs = pts.map(p => p.x), depth = 0.18;
+    const x0 = aft ? Math.max(0.02, Math.min(...xs) - 0.05 - depth) : Math.min(LEN - 0.02 - depth, Math.max(...xs) + 0.05);
+    const box = shadowed(new THREE.Mesh(arcSection(R - 0.22, R - 0.004, t0, t1, depth, x0), M.box));
+    equipment.add(box);
+    const face = new THREE.Mesh(arcSection(R - 0.21, R - 0.014, t0 + 0.012, t1 - 0.012, 0.004, aft ? x0 + depth : x0 - 0.004), M.boxFace);
+    equipment.add(face);
+    const tm = (t0 + t1) / 2, rm = R - 0.11;
+    addLabel(names[key], new THREE.Vector3(x0 + depth / 2, rm * Math.cos(tm), rm * Math.sin(tm)).add(new THREE.Vector3(0, 0, 0)), "eq");
+  }
+}
+scene.add(equipment);
+
+// ---------------------------------------------------------------- cables (one group per routing method)
+const SLOTS = [[0, 0]];
+for (let a = 0; a < 6; a++) SLOTS.push([SLOT * Math.cos(a * Math.PI / 3), SLOT * Math.sin(a * Math.PI / 3)]);
+for (let a = 0; a < 6; a++) SLOTS.push([SLOT * 1.75 * Math.cos(a * Math.PI / 3 + Math.PI / 6),
+                                        SLOT * 1.75 * Math.sin(a * Math.PI / 3 + Math.PI / 6)]);
+
+// Centreline lifted off the skin, lightly smoothed and kept on the offset cylinder (visual only).
+function centreline(path) {
+  let pts = path.map(i => { const p = vtx(i); return p.addScaledVector(inward(p), LIFT); });
+  for (let it = 0; it < 4; it++) {
+    pts = pts.map((p, i) => (i === 0 || i === pts.length - 1) ? p
+      : p.clone().multiplyScalar(0.5).addScaledVector(pts[i - 1], 0.25).addScaledVector(pts[i + 1], 0.25));
+    for (const p of pts) { const rr = Math.hypot(p.y, p.z), s = (R - LIFT) / rr; p.y *= s; p.z *= s; }
+  }
+  return pts;
+}
+function tangents(pts, sign) {
+  return pts.map((p, i) => {
+    const a = pts[Math.max(i - 1, 0)], b = pts[Math.min(i + 1, pts.length - 1)];
+    const t = b.clone().sub(a).multiplyScalar(sign), n = inward(p);
+    return t.addScaledVector(n, -t.dot(n)).normalize();
+  });
+}
+
+const methods = D.methods.map(m => buildMethod(m));
+function buildMethod(m) {
+  const group = new THREE.Group();
+  const clampsG = new THREE.Group(), violG = new THREE.Group();
+  const cables = [];
+  const centres = [];
+  D.cables.forEach((c, k) => {
+    const path = m.routes[c.name];
+    const ctr = centreline(path);
+    const dir = ctr[ctr.length - 1].clone().sub(ctr[0]);
+    const sign = (dir.x + 0.05 * dir.z) >= 0 ? 1 : -1;  // one lateral orientation for cables travelling the same way
+    const tg = tangents(ctr, sign);
+    const [u, v] = SLOTS[k % SLOTS.length];
+    const pts = ctr.map((p, i) => {
+      const n = inward(p), b = new THREE.Vector3().crossVectors(n, tg[i]).normalize();
+      return p.clone().addScaledVector(b, u).addScaledVector(n, v);
+    });
+    const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+    const segs = Math.max(32, Math.round(curve.getLength() / 0.018));
+    const radial = 10;
+    const geo = new THREE.TubeGeometry(curve, segs, CABLE_R[c.cls] ?? 0.005, radial, false);
+    const mat = new THREE.MeshPhysicalMaterial({ color: D.classColors[c.cls], roughness: 0.5, metalness: 0.0,
+                                                 clearcoat: 0.3, clearcoatRoughness: 0.45 });
+    const mesh = shadowed(new THREE.Mesh(geo, mat));
+    mesh.userData = { cable: c, k };
+    group.add(mesh);
+    // Connectors (backshell + coupling ring in class colour) and white ID sleeves near both ends.
+    const ends = new THREE.Group();
+    const len = curve.getLength();
+    for (const [u0, outDir] of [[0, -1], [1, 1]]) {
+      const p = curve.getPointAt(u0), t = curve.getTangentAt(u0).multiplyScalar(outDir);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), t);
+      const shell = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.016, 0.05, 20), M.dark));
+      shell.quaternion.copy(q); shell.position.copy(p).addScaledVector(t, 0.025);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.0185, 0.0185, 0.012, 20),
+                                  new THREE.MeshStandardMaterial({ color: D.classColors[c.cls], roughness: 0.4, metalness: 0.3 }));
+      ring.quaternion.copy(q); ring.position.copy(p).addScaledVector(t, 0.046);
+      ends.add(shell, ring);
+      const us = Math.min(0.12 / len, 0.3), uu = u0 === 0 ? us : 1 - us;
+      const sl = new THREE.Mesh(new THREE.CylinderGeometry((CABLE_R[c.cls] ?? 0.005) * 1.35, (CABLE_R[c.cls] ?? 0.005) * 1.35, 0.035, 14), M.sleeve);
+      sl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), curve.getTangentAt(uu));
+      sl.position.copy(curve.getPointAt(uu));
+      ends.add(sl);
+    }
+    group.add(ends);
+    cables.push({ c, mesh, geo, segs, radial, curve, ends, length: m.lengths[c.name] });
+    centres.push(ctr);
+  });
+  buildClamps(centres, clampsG);
+  buildViolations(m.violations, violG);
+  group.add(clampsG, violG);
+  group.visible = false;
+  scene.add(group);
+  const seq = (m.order || D.cables.map(c => c.name)).map(n => D.cables.findIndex(c => c.name === n));
+  return { m, group, cables, clampsG, violG, seq };
+}
+
+function distToPolyline(p, pts) {
+  let best = Infinity;
+  const ab = new THREE.Vector3(), ap = new THREE.Vector3();
+  for (let i = 0; i < pts.length - 1; i++) {
+    ab.subVectors(pts[i + 1], pts[i]); ap.subVectors(p, pts[i]);
+    const t = THREE.MathUtils.clamp(ap.dot(ab) / Math.max(ab.lengthSq(), 1e-12), 0, 1);
+    best = Math.min(best, ap.sub(ab.multiplyScalar(t)).length());
+  }
+  return best;
+}
+function buildClamps(centres, parent) {
+  const spots = [];
+  centres.forEach(ctr => {
+    let acc = CLAMP_STEP * 0.6;
+    for (let i = 1; i < ctr.length; i++) {
+      const seg = ctr[i].distanceTo(ctr[i - 1]);
+      acc += seg;
+      if (acc < CLAMP_STEP || i === ctr.length - 1) continue;
+      acc = 0;
+      const p = ctr[i];
+      if (spots.some(s => s.p.distanceTo(p) < 0.09)) continue;
+      const t = ctr[i + 1].clone().sub(ctr[i - 1]).normalize();
+      const n = inward(p);
+      t.addScaledVector(n, -t.dot(n)).normalize();
+      const count = centres.filter(o => distToPolyline(p, o) < 0.012).length;
+      spots.push({ p, t, n, count });
+    }
+  });
+  const torus = new THREE.InstancedMesh(new THREE.TorusGeometry(0.02, 0.0026, 8, 28), M.clamp, spots.length);
+  const brk = new THREE.InstancedMesh(new THREE.BoxGeometry(0.016, 0.026, 1), M.bracket, spots.length);
+  const mtx = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion();
+  spots.forEach((sp, k) => {
+    const rad = 0.0095 + (sp.count > 1 ? SLOT : 0) + (sp.count > 7 ? SLOT * 0.75 : 0);
+    const basisT = new THREE.Matrix4().makeBasis(sp.n, new THREE.Vector3().crossVectors(sp.t, sp.n), sp.t);
+    q.setFromRotationMatrix(basisT);
+    mtx.compose(sp.p, q, s.set(rad / 0.02, rad / 0.02, 1));
+    torus.setMatrixAt(k, mtx);
+    const h = Math.max(0.01, LIFT - rad);
+    const basisB = new THREE.Matrix4().makeBasis(sp.t, new THREE.Vector3().crossVectors(sp.n, sp.t), sp.n);
+    q.setFromRotationMatrix(basisB);
+    const base = sp.p.clone().addScaledVector(sp.n, -LIFT + h / 2);
+    mtx.compose(base, q, s.set(1, 1, h));
+    brk.setMatrixAt(k, mtx);
+  });
+  shadowed(torus); shadowed(brk);
+  parent.add(torus, brk);
+}
+function buildViolations(flat, parent) {
+  const seen = new Set(), pts = [];
+  for (let i = 0; i < flat.length; i += 3) {
+    const key = flat.slice(i, i + 3).map(v => Math.round(v * 200)).join(",");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const p = new THREE.Vector3(flat[i], flat[i + 1], flat[i + 2]);
+    pts.push(p.addScaledVector(inward(p), LIFT));
+  }
+  if (!pts.length) return;
+  const inst = new THREE.InstancedMesh(new THREE.SphereGeometry(0.012, 10, 8), M.viol, pts.length);
+  const mtx = new THREE.Matrix4();
+  pts.forEach((p, k) => inst.setMatrixAt(k, mtx.makeTranslation(p.x, p.y, p.z)));
+  parent.add(inst);
+}
+
+// Cable name tags at the start terminals (same for every method).
+const cableLabels = new THREE.Group();
+labels.add(cableLabels);
+for (const c of D.cables) {
+  const p = vtx(c.start);
+  const o = addLabel(c.name, p.addScaledVector(inward(p), LIFT + 0.07), "", D.classColors[c.cls]);
+  labels.remove(o); cableLabels.add(o);
+}
+
+// ---------------------------------------------------------------- UI: tabs, stats, legend, toggles, views
+let active = null;
+const tabsEl = document.getElementById("tabs");
+methods.forEach(v => {
+  const b = document.createElement("button");
+  b.type = "button"; b.setAttribute("role", "tab"); b.dataset.key = v.m.key; b.textContent = v.m.label;
+  b.addEventListener("click", () => select(v.m.key, false));
+  tabsEl.appendChild(b);
+});
+function renderStats(m) {
+  const fmt = (x, d) => x.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const items = [
+    ["Toplam uzunluk", fmt(m.total_length_m, 2) + " m", ""],
+    ["Benzersiz uzunluk", fmt(m.unique_length_m, 2) + " m", ""],
+    ["Demetlenme oranı", fmt(m.bundling_ratio, 3), ""],
+    ["EMC ihlali", fmt(m.emc_points, 0) + " nokta", m.emc_points ? "ng" : "ok"],
+    ["Bükülme ihlali", String(m.bend_points), m.bend_points ? "ng" : "ok"],
+    ["Yasak hacim ihlali", String(m.forbidden_points), m.forbidden_points ? "ng" : "ok"],
+    ["Boşluk payı ihlali", String(m.clearance_points), m.clearance_points ? "ng" : "ok"],
+    ["Kapasite ihlali", m.capacity_edges + " ayrıt", m.capacity_edges ? "ng" : "ok"],
+  ];
+  document.getElementById("stats").innerHTML = items
+    .map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`).join("");
+}
+document.getElementById("legend").innerHTML =
+  Object.entries(D.classColors).map(([k, c]) => `<div><span class="sw" style="background:${c}"></span>${k} (${CLASS_TR[k] || k})</div>`).join("") +
+  `<div><span class="sw" style="background:#e34948;opacity:.75"></span>yasak hacim</div>` +
+  `<div><span class="dot" style="background:#ff2a3d"></span>EMC ihlali noktası</div>`;
+
+const toggles = [
+  ["skin", "Gövde kaplaması", true, v => { skin.visible = v; }],
+  ["structure", "Frame / stringer", true, v => { structure.visible = v; }],
+  ["floor", "Zemin", true, v => { floor.visible = v; }],
+  ["keepout", "Yasak hacimler", true, v => { keepout.visible = v; }],
+  ["equipment", "Ekipman", true, v => { equipment.visible = v; props.visible = v; }],
+  ["clamps", "Kelepçeler", true, v => methods.forEach(x => { x.clampsG.visible = v; })],
+  ["viol", "EMC ihlalleri", true, v => methods.forEach(x => { x.violG.visible = v; })],
+  ["labels", "Etiketler", true, v => { labels.visible = v; }],
+  ["rotate", "Otomatik döndür", false, v => { controls.autoRotate = v; }],
+];
+const chipEls = {};
+const chips = document.getElementById("chips");
+for (const [key, text, on, fn] of toggles) {
+  const l = document.createElement("label");
+  l.className = "chip";
+  l.innerHTML = `<input type="checkbox" ${on ? "checked" : ""}> ${text}`;
+  const input = l.querySelector("input");
+  input.addEventListener("change", () => fn(input.checked));
+  chipEls[key] = input;
+  chips.appendChild(l);
+  fn(on);
+}
+function setToggle(key, v) { if (chipEls[key].checked !== v) { chipEls[key].checked = v; chipEls[key].dispatchEvent(new Event("change")); } }
+
+const VIEWS = {
+  inside: { name: "İçeriden", pos: [-1.35, -0.3, 1.0], target: [3.2, 0, 1.3], floor: true },
+  below: { name: "Alttan", pos: [0.1, -3.4, -3.9], target: [3, 0, 1.1], floor: false },
+  side: { name: "Dışarıdan", pos: [3.9, -7.6, 1.7], target: [3, 0, 1.15], floor: true },
+  top: { name: "Üstten", pos: [3, -1.3, 8.2], target: [3, 0, 0.8], floor: true },
+};
+const viewsEl = document.getElementById("views");
+for (const [key, v] of Object.entries(VIEWS)) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = v.name;
+  b.addEventListener("click", () => flyTo(key));
+  viewsEl.appendChild(b);
+}
+let tween = null;
+function flyTo(key, instant = false) {
+  const v = VIEWS[key];
+  setToggle("floor", v.floor);
+  const p1 = new THREE.Vector3(...v.pos), t1 = new THREE.Vector3(...v.target);
+  if (instant || REDUCED) { camera.position.copy(p1); controls.target.copy(t1); tween = null; return; }
+  tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1, t1, start: performance.now(), dur: 1100 };
+}
+
+// ---------------------------------------------------------------- routing playback animation
+const statusEl = document.getElementById("status");
+const playBtn = document.getElementById("play");
+let anim = null;
+const PER_CABLE = 0.75;   // seconds per cable
+function setProgress(view, f) {   // f in [0, n]: cables drawn in routing order, the first floor(f) complete
+  view.seq.forEach((ci, rank) => {
+    const cb = view.cables[ci];
+    const frac = THREE.MathUtils.clamp(f - rank, 0, 1);
+    cb.geo.setDrawRange(0, Math.floor(frac * cb.segs) * cb.radial * 6);
+    cb.ends.visible = frac > 0;
+  });
+}
+function play() {
+  const v = methods[active];
+  anim = { view: v, start: performance.now() };
+  v.clampsG.parent && (v.clampsG.visible = false);
+  v.violG.visible = false;
+  playBtn.textContent = "■ Durdur";
+  setProgress(v, 0);
+}
+function finish() {
+  if (!anim) return;
+  const v = anim.view;
+  setProgress(v, v.cables.length);
+  v.clampsG.visible = chipEls.clamps.checked;
+  v.violG.visible = chipEls.viol.checked;
+  anim = null;
+  statusEl.textContent = "";
+  playBtn.textContent = "▶ Rotalamayı oynat";
+}
+playBtn.addEventListener("click", () => (anim ? finish() : play()));
+
+function select(key, autoplay) {
+  finish();
+  clearSelection();
+  const idx = methods.findIndex(v => v.m.key === key);
+  methods.forEach((v, i) => { v.group.visible = i === idx; });
+  active = idx;
+  tabsEl.querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.key === key)));
+  renderStats(methods[idx].m);
+  setProgress(methods[idx], methods[idx].cables.length);
+  if (autoplay && !REDUCED) play();
+}
+
+// ---------------------------------------------------------------- hover tooltip and click-to-select
+const tip = document.getElementById("tip"), selinfo = document.getElementById("selinfo");
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let pointerPx = null, hovered = null, selected = null, envelope = null, downAt = null;
+renderer.domElement.addEventListener("pointermove", e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  pointerPx = [e.clientX - r.left, e.clientY - r.top];
+  updateHover();
+});
+renderer.domElement.addEventListener("pointerleave", () => { pointerPx = null; updateHover(); });
+renderer.domElement.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
+  const hit = pick();
+  if (hit) selectCable(hit); else clearSelection();
+});
+function pick() {
+  if (active === null || !pointerPx) return null;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(methods[active].cables.map(c => c.mesh), false);
+  return hits.length ? methods[active].cables.find(c => c.mesh === hits[0].object) : null;
+}
+function updateHover() {
+  const cb = pointerPx && !tween ? pick() : null;
+  setHover(cb);
+  if (!cb) { tip.style.display = "none"; return; }
+  tip.style.display = "block";
+  tip.style.left = pointerPx[0] + "px"; tip.style.top = pointerPx[1] + "px";
+  tip.textContent = `${cb.c.name} · ${cb.c.cls} (${CLASS_TR[cb.c.cls] || cb.c.cls}) · ${cb.length.toFixed(2)} m`;
+}
+function setHover(cb) {
+  if (hovered === cb) return;
+  if (hovered && hovered !== selected) hovered.mesh.material.emissive.setHex(0x000000);
+  hovered = cb;
+  if (cb) cb.mesh.material.emissive.setHex(0x333333);
+}
+function selectCable(cb) {
+  clearSelection();
+  selected = cb;
+  cb.mesh.material.emissive.setHex(0x555555);
+  const others = [...new Set(D.cables.map(c => c.cls))].filter(k => k !== cb.c.cls);
+  const radius = Math.max(0, ...others.map(k => sep(cb.c.cls, k)));
+  if (radius > 0) {
+    envelope = new THREE.Mesh(new THREE.TubeGeometry(cb.curve, Math.round(cb.segs / 2), radius, 28, false),
+      new THREE.MeshBasicMaterial({ color: D.classColors[cb.c.cls], transparent: true, opacity: 0.12, depthWrite: false,
+                                    side: THREE.DoubleSide }));
+    scene.add(envelope);
+  }
+  const seps = others.map(k => `${k}: ${sep(cb.c.cls, k).toFixed(2)} m`).join(", ");
+  selinfo.textContent = `Seçili: ${cb.c.name} (${cb.c.cls}) — güzergâh uzunluğu ${cb.length.toFixed(2)} m. ` +
+    `Gösterilen zarf, diğer sınıflara gereken en büyük ayrım mesafesidir (${seps}).`;
+}
+function clearSelection() {
+  if (selected) selected.mesh.material.emissive.setHex(0x000000);
+  selected = null;
+  if (envelope) { scene.remove(envelope); envelope.geometry.dispose(); envelope.material.dispose(); envelope = null; }
+  selinfo.textContent = "";
+}
+
+// ---------------------------------------------------------------- resize and render loop
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h, false);
+  labelRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  // Keep roughly the same horizontal field of view on narrow (portrait) screens.
+  const vfov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(72) / 2) / camera.aspect);
+  camera.fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(vfov), 42, 80);
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(host);
+resize();
+
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function loop(now) {
+  if (tween) {
+    const k = Math.min(1, (now - tween.start) / tween.dur), e = ease(k);
+    camera.position.lerpVectors(tween.p0, tween.p1, e);
+    controls.target.lerpVectors(tween.t0, tween.t1, e);
+    if (k >= 1) tween = null;
+  }
+  if (anim) {
+    // rAF timestamps can precede the performance.now() taken in play(): never go below 0.
+    const f = Math.max(0, (now - anim.start) / 1000 / PER_CABLE), n = anim.view.cables.length;
+    if (f >= n) finish();
+    else {
+      setProgress(anim.view, f);
+      const cb = anim.view.cables[anim.view.seq[Math.floor(f)]];
+      statusEl.textContent = `Rotalanıyor: ${cb.c.name} (${cb.c.cls}) — ${Math.floor(f) + 1}/${n}`;
+    }
+  }
+  if (actuatorArm && !REDUCED) actuatorArm.rotation.x = 0.55 * Math.sin(now / 1000 * 0.9);
+  if (controls.update() && pointerPx) updateHover();   // the camera moved under a resting pointer
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+
+flyTo("inside", true);
+select(D.initial, true);
+document.getElementById("loading").remove();
+window.__viewerReady = true;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

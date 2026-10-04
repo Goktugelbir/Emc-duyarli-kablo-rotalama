@@ -6,7 +6,9 @@ from any standard or real aircraft.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+import numpy as np
 
 from .geometry import surface_point
 from .graph import RoutingGraph
@@ -77,3 +79,17 @@ def build_scenario(graph: RoutingGraph, radius: float, specs: list[CableSpec] = 
         end = graph.nearest_node(surface_point(*s.end_xt, radius))
         cables.append(Cable(s.name, s.emc_class, start, end))
     return cables
+
+
+def perturb_specs(
+    specs: list[CableSpec], rng: np.random.Generator, dx: float = 0.05, dtheta: float = 1.5
+) -> list[CableSpec]:
+    """Shift every terminal by up to +-dx [m] axially and +-dtheta [deg] around the arc.
+
+    The bounds are small enough that neighbouring terminals of different classes stay further
+    apart than their required separation, so EMC violations remain avoidable.
+    """
+    def move(xt: tuple[float, float]) -> tuple[float, float]:
+        return (float(xt[0] + rng.uniform(-dx, dx)), float(xt[1] + rng.uniform(-dtheta, dtheta)))
+
+    return [replace(s, start_xt=move(s.start_xt), end_xt=move(s.end_xt)) for s in specs]

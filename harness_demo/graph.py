@@ -2,7 +2,8 @@
 
 Nodes are mesh vertices, edges are mesh edges weighted by Euclidean length.
 Vertices inside forbidden volumes are removed together with their edges; edges
-whose straight segment would clip a volume are removed as well.
+whose straight segment would clip a volume are removed as well. With a clearance
+margin the volumes are first inflated, so routes keep that distance from them.
 """
 
 from __future__ import annotations
@@ -83,8 +84,16 @@ def _segment_clips_volume(p: np.ndarray, q: np.ndarray, volumes: list[ForbiddenV
     return hit
 
 
-def build_routing_graph(mesh: trimesh.Trimesh, volumes: list[ForbiddenVolume]) -> RoutingGraph:
-    """Create the routing graph, removing forbidden nodes/edges and small islands."""
+def build_routing_graph(
+    mesh: trimesh.Trimesh, volumes: list[ForbiddenVolume], clearance: float = 0.0
+) -> RoutingGraph:
+    """Create the routing graph, removing forbidden nodes/edges and small islands.
+
+    `clearance` [m] inflates every volume first (boxes grow on each side, spheres in radius),
+    which is conservative: the inflated box contains every point within `clearance` of the box.
+    """
+    if clearance > 0.0:
+        volumes = [v.inflated(clearance) for v in volumes]
     pos = np.asarray(mesh.vertices)
     forbidden = mark_forbidden_vertices(pos, volumes)
     edges = np.sort(np.asarray(mesh.edges_unique), axis=1)

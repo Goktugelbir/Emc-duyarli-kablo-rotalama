@@ -8,7 +8,7 @@ shortest-path ties are broken deterministically.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import trimesh
@@ -74,11 +74,18 @@ class BoxVolume:
     name: str
     lo: tuple[float, float, float]
     hi: tuple[float, float, float]
+    prop: str = ""  # visual-only hint for the interactive viewer (e.g. "pipe", "panel")
 
     def contains(self, points: np.ndarray) -> np.ndarray:
         """Boolean mask of points strictly inside the box."""
         p = np.atleast_2d(points)
         return np.all((p > np.asarray(self.lo)) & (p < np.asarray(self.hi)), axis=1)
+
+    def inflated(self, margin: float) -> "BoxVolume":
+        """Box grown by `margin` on every side (conservative clearance envelope)."""
+        lo = tuple(v - margin for v in self.lo)
+        hi = tuple(v + margin for v in self.hi)
+        return replace(self, lo=lo, hi=hi)
 
     def to_mesh(self) -> trimesh.Trimesh:
         """Triangle mesh of the box, for visualisation."""
@@ -93,11 +100,16 @@ class SphereVolume:
     name: str
     center: tuple[float, float, float]
     radius: float
+    prop: str = ""  # visual-only hint for the interactive viewer (e.g. "actuator")
 
     def contains(self, points: np.ndarray) -> np.ndarray:
         """Boolean mask of points strictly inside the sphere."""
         p = np.atleast_2d(points)
         return np.linalg.norm(p - np.asarray(self.center), axis=1) < self.radius
+
+    def inflated(self, margin: float) -> "SphereVolume":
+        """Sphere grown by `margin` (exact clearance envelope)."""
+        return replace(self, radius=self.radius + margin)
 
     def to_mesh(self) -> trimesh.Trimesh:
         """Triangle mesh of the sphere, for visualisation."""
@@ -114,11 +126,11 @@ def default_forbidden_volumes(radius: float = 2.0) -> list[ForbiddenVolume]:
     sphere_c = surface_point(3.0, 50.0, radius)
     return [
         # Fuel line running along the crown of the section.
-        BoxVolume("Yakıt hattı", lo=(1.8, -0.45, 1.6), hi=(4.2, 0.45, 2.3)),
+        BoxVolume("Yakıt hattı", lo=(1.8, -0.45, 1.6), hi=(4.2, 0.45, 2.3), prop="pipe"),
         # Swept envelope of a moving-surface actuator.
-        SphereVolume("Hareketli yüzey zarfı", center=tuple(sphere_c), radius=0.5),
+        SphereVolume("Hareketli yüzey zarfı", center=tuple(sphere_c), radius=0.5, prop="actuator"),
         # Maintenance access panel (no cables may cross it).
-        BoxVolume("Bakım kapağı", lo=(4.2, -1.65, 1.0), hi=(5.0, -1.10, 1.8)),
+        BoxVolume("Bakım kapağı", lo=(4.2, -1.65, 1.0), hi=(5.0, -1.10, 1.8), prop="panel"),
     ]
 
 

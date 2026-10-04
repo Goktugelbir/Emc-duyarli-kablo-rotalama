@@ -17,6 +17,7 @@ COLUMNS: list[tuple[str, str, str]] = [
     ("emc_points", "EMC ihlali [nokta]", "{}"),
     ("bend_points", "Bükülme ihlali", "{}"),
     ("forbidden_points", "Yasak hacim ihlali", "{}"),
+    ("clearance_points", "Boşluk payı ihlali [nokta]", "{}"),
     ("capacity_edges", "Kapasite ihlali [ayrıt]", "{}"),
     ("runtime_s", "Süre [s]", "{:.2f}"),
 ]

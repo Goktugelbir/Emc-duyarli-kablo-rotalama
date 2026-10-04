@@ -15,13 +15,12 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
 import trimesh
-from plotly.offline import get_plotlyjs_version
 from plotly.subplots import make_subplots
 from PIL import Image
 
-from .geometry import ForbiddenVolume
+from .geometry import ForbiddenVolume, SphereVolume
 from .routing import RoutingResult
-from .scenarios import Cable
+from .scenarios import Cable, separation
 from .visualize import (
     CAMERA,
     CLASS_COLORS,
@@ -45,6 +44,7 @@ SHORT_LABELS: dict[str, str] = {
     "bundled": "b) Demetleme",
     "emc_aware": "c) EMC duyarlı",
     "lagrangian": "d) Lagrange",
+    "integrated": "e) Bütünleşik",
 }
 
 
@@ -118,13 +118,13 @@ def plot_comparison(
     under each panel and a shared title/legend strip on top.
     """
     pw, ph = panel_size
-    title = "Aynı senaryo, aynı kamera: EMC ayrımını gözeten rotalama ihlalleri ortadan kaldırıyor"
+    title = "Aynı senaryo, aynı kamera: bütünleşik rotalama EMC, kapasite ve bükülme ihlallerini ortadan kaldırıyor"
     figs = [_legend_strip(title, include_violation=True)]
     for routes, caption, violations in panels:
         fig = _scene_figure(mesh, volumes, cables, routes, [_violation_trace(violations)])
         fig.update_layout(margin={"b": 60})
         fig.add_annotation(text=f"<b>{caption}</b>", x=0.5, y=0.0, xref="paper", yref="paper", yanchor="top",
-                           yshift=-12, showarrow=False, font={"size": 24, "color": "#0b0b0b"})
+                           yshift=-12, showarrow=False, font={"size": 20, "color": "#0b0b0b"})
         figs.append(fig)
 
     sizes = [(pw * len(panels), 130)] + [(pw, ph)] * len(panels)
@@ -193,122 +193,52 @@ def render_rotation_gif(
 
 
 def plot_metrics_chart(rows: list[dict[str, object]], png_path: Path) -> None:
-    """Two bar panels: bundling ratio and EMC violation points per method."""
+    """Three bar panels: bundling ratio, EMC violation points and capacity violations per method."""
     labels = [SHORT_LABELS.get(str(r["method"]), str(r["label"])) for r in rows]
     ratio = [float(r["bundling_ratio"]) for r in rows]
     emc = [int(r["emc_points"]) for r in rows]
+    cap = [int(r["capacity_edges"]) for r in rows]
     fig = make_subplots(
-        rows=1, cols=2, horizontal_spacing=0.14,
-        subplot_titles=("Demetlenme oranı  (yüksek = daha çok ortak güzergâh)",
-                        "EMC ihlali [nokta]  (düşük = daha iyi)"),
+        rows=1, cols=3, horizontal_spacing=0.1,
+        subplot_titles=("Demetlenme oranı  (yüksek = daha çok ortak yol)",
+                        "EMC ihlali [nokta]  (düşük = iyi)",
+                        "Kapasite ihlali [ayrıt]  (düşük = iyi)"),
     )
     common = {"orientation": "h", "marker": {"color": BAR_COLOR, "cornerradius": 4},
               "textposition": "outside", "cliponaxis": False, "showlegend": False,
               "textfont": {"color": "#0b0b0b", "size": 15}}
     fig.add_trace(go.Bar(y=labels, x=ratio, text=[f"{v:.3f}" for v in ratio], **common), row=1, col=1)
     fig.add_trace(go.Bar(y=labels, x=emc, text=[f"{v}" for v in emc], **common), row=1, col=2)
+    fig.add_trace(go.Bar(y=labels, x=cap, text=[f"{v}" for v in cap], **common), row=1, col=3)
     fig.update_yaxes(autorange="reversed", tickfont={"size": 15, "color": "#0b0b0b"}, ticklabelstandoff=12)
     fig.update_xaxes(gridcolor=GRID, zeroline=True, zerolinecolor="#c3c2b7",
                      tickfont={"color": TEXT_SECONDARY, "size": 13})
     fig.update_xaxes(range=[0, 1.0], row=1, col=1)
-    fig.update_xaxes(range=[0, max(emc) * 1.15 if max(emc) else 1], row=1, col=2)
+    fig.update_xaxes(range=[0, max(emc) * 1.2 if max(emc) else 1], row=1, col=2)
+    fig.update_xaxes(range=[0, max(cap) * 1.2 if max(cap) else 1], row=1, col=3)
     fig.update_layout(
-        title={"text": "Yöntemlerin karşılaştırması (aynı senaryo, 11 kablo)", "x": 0.02, "font": {"size": 20, "color": "#0b0b0b"}},
+        title={"text": f"Yöntemlerin karşılaştırması (aynı senaryo, {len(rows)} yöntem)", "x": 0.02, "font": {"size": 20, "color": "#0b0b0b"}},
         bargap=0.35, plot_bgcolor=SURFACE, paper_bgcolor=SURFACE,
         margin={"l": 20, "r": 40, "t": 90, "b": 40},
     )
     fig.update_annotations(font={"size": 16, "color": TEXT_SECONDARY})
-    fig.write_image(png_path, width=1600, height=520, scale=1)
+    fig.write_image(png_path, width=1800, height=560, scale=1)
 
 
-_PAGE_TEMPLATE = """<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kablo Rotalama 3B</title>
-<script src="https://cdn.plot.ly/plotly-__PLOTLYJS_VERSION__.min.js" charset="utf-8"></script>
-<style>
-  :root {
-    color-scheme: light;
-    --surface: #fcfcfb; --surface-2: #f1f0ec; --border: #dcdbd5;
-    --text: #0b0b0b; --text-2: #52514e; --accent: #2a78d6;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--surface); color: var(--text);
-         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 40px; }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  p.lead { margin: 0 0 20px; color: var(--text-2); }
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-  .tabs button { font: inherit; padding: 8px 14px; border-radius: 8px; cursor: pointer;
-                 border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
-  .stat { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
-  .stat .k { font-size: .8rem; color: var(--text-2); }
-  .stat .v { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  #plot { width: 100%; height: min(72vh, 720px); border: 1px solid var(--border); border-radius: 8px; }
-  footer { margin-top: 16px; font-size: .85rem; color: var(--text-2); }
-</style>
-</head>
-<body>
-<main>
-  <h1>Kablo demeti rotalama — etkileşimli 3B görünüm</h1>
-  <p class="lead">Yarım silindir gövde kesiti üzerinde 11 kablonun dört yöntemle rotalanması.
-     Sürükleyerek döndürün, tekerlekle yakınlaşın, renklere göre EMC sınıfını izleyin.</p>
-  <div class="tabs" role="tablist" id="tabs"></div>
-  <div class="stats" id="stats" aria-live="polite"></div>
-  <div id="plot"></div>
-  <footer>Tüm değerler temsilîdir ve <code>python main.py</code> çıktısından üretilmiştir.
-    Gerçek uçak verisi kullanılmamıştır. Kırmızı yarı saydam hacimler yasak bölgelerdir.</footer>
-</main>
-<script>
-const FIG = __FIGURE_JSON__;
-const METHODS = __METHODS_JSON__;
-const N_CONTEXT = __N_CONTEXT__;
-const N_TRACES = FIG.data.length;
+VIEWER_TEMPLATE = Path(__file__).with_name("viewer_template.html")
+THREE_VERSION = "0.169.0"
 
-function visibility(active) {
-  const vis = new Array(N_TRACES).fill(false);
-  for (let i = 0; i < N_CONTEXT; i++) vis[i] = true;
-  const m = METHODS.find(x => x.key === active);
-  for (let i = m.first; i < m.last; i++) vis[i] = true;
-  return vis;
-}
-function renderStats(m) {
-  const items = [
-    ["Toplam uzunluk", m.total_length_m.toFixed(2) + " m"],
-    ["Benzersiz uzunluk", m.unique_length_m.toFixed(2) + " m"],
-    ["Demetlenme oranı", m.bundling_ratio.toFixed(3)],
-    ["EMC ihlali", m.emc_points + " nokta"],
-    ["Bükülme ihlali", String(m.bend_points)],
-    ["Kapasite ihlali", m.capacity_edges + " ayrıt"],
-  ];
-  document.getElementById("stats").innerHTML = items
-    .map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
-}
-function select(key) {
-  document.querySelectorAll("#tabs button").forEach(b =>
-    b.setAttribute("aria-selected", String(b.dataset.key === key)));
-  Plotly.restyle("plot", { visible: visibility(key) });
-  renderStats(METHODS.find(x => x.key === key));
-}
-const tabs = document.getElementById("tabs");
-METHODS.forEach(m => {
-  const b = document.createElement("button");
-  b.type = "button"; b.setAttribute("role", "tab"); b.dataset.key = m.key; b.textContent = m.label;
-  b.addEventListener("click", () => select(m.key));
-  tabs.appendChild(b);
-});
-FIG.data.forEach((t, i) => { t.visible = i < N_CONTEXT; });
-Plotly.newPlot("plot", FIG.data, FIG.layout, { responsive: true, displaylogo: false })
-  .then(() => select(METHODS[__INITIAL__].key));
-</script>
-</body>
-</html>
-"""
+
+def _volume_spec(vol: ForbiddenVolume) -> dict[str, object]:
+    """Plain-JSON description of a keep-out volume for the viewer."""
+    if isinstance(vol, SphereVolume):
+        return {"name": vol.name, "kind": "sphere", "center": list(vol.center), "radius": vol.radius, "prop": vol.prop}
+    return {"name": vol.name, "kind": "box", "lo": list(vol.lo), "hi": list(vol.hi), "prop": vol.prop}
+
+
+def _flat(a: np.ndarray, decimals: int) -> list[float]:
+    """Rounded, flattened float list (keeps the embedded JSON small)."""
+    return np.round(np.asarray(a, dtype=float), decimals).ravel().tolist()
 
 
 def write_interactive_page(
@@ -317,33 +247,49 @@ def write_interactive_page(
     cables: list[Cable],
     results: list[RoutingResult],
     rows: list[dict[str, object]],
+    violations: dict[str, np.ndarray],
     html_path: Path,
-    initial: str = "emc_aware",
+    radius: float,
+    length: float,
+    clearance: float = 0.0,
+    initial: str = "integrated",
 ) -> None:
-    """Single self-contained page (plotly.js from CDN) with one tab per routing method."""
-    context = context_traces(mesh, volumes)
-    fig = go.Figure(context)
+    """Self-contained three.js page (library from CDN) with one tab per routing method.
+
+    Only geometry, node paths, check results and metric rows are embedded; all realism
+    (structure, clamps, connectors, smoothing, lighting) is added in the viewer and is visual-only.
+    """
+    pos = np.asarray(mesh.vertices)
     methods = []
     for res, row in zip(results, rows):
-        first = len(fig.data)
-        for t in route_traces(mesh, cables, res.routes):
-            fig.add_trace(t)
+        routes = {c.name: [int(n) for n in res.routes[c.name]] for c in cables}
+        lengths = {
+            name: float(np.linalg.norm(np.diff(pos[path], axis=0), axis=1).sum()) for name, path in routes.items()
+        }
         methods.append({
-            "key": res.method, "label": res.label, "first": first, "last": len(fig.data),
-            **{k: row[k] for k in ("total_length_m", "unique_length_m", "bundling_ratio",
-                                   "emc_points", "bend_points", "capacity_edges")},
+            "key": res.method, "label": res.label, "routes": routes, "lengths": lengths,
+            "order": res.order or [c.name for c in cables],
+            "violations": _flat(violations.get(res.method, np.empty((0, 3))), 3),
+            **{k: row[k] for k in ("total_length_m", "unique_length_m", "bundling_ratio", "emc_points",
+                                   "bend_points", "forbidden_points", "clearance_points", "capacity_edges",
+                                   "runtime_s")},
         })
-    fig.update_layout(
-        scene={"aspectmode": "data", "camera": CAMERA, **SCENE_AXES},
-        legend={"x": 0.99, "y": 0.97, "xanchor": "right", "bgcolor": "rgba(252,252,251,0.85)"},
-        margin={"l": 0, "r": 0, "t": 0, "b": 0}, paper_bgcolor=SURFACE,
-    )
+    classes = sorted({c.emc_class for c in cables}, key=list(CLASS_COLORS).index)
+    data = {
+        "radius": radius, "length": length, "clearance": clearance,
+        "mesh": {"v": _flat(pos, 4), "f": np.asarray(mesh.faces, dtype=int).ravel().tolist()},
+        "volumes": [_volume_spec(v) for v in volumes],
+        "cables": [{"name": c.name, "cls": c.emc_class, "start": c.start, "end": c.end} for c in cables],
+        "classColors": CLASS_COLORS,
+        "separation": {f"{a}|{b}": separation(a, b) for a in classes for b in classes},
+        "methods": methods,
+        "initial": initial if any(m["key"] == initial for m in methods) else methods[0]["key"],
+    }
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     page = (
-        _PAGE_TEMPLATE.replace("__PLOTLYJS_VERSION__", get_plotlyjs_version())
-        .replace("__FIGURE_JSON__", fig.to_json())
-        .replace("__METHODS_JSON__", json.dumps(methods, ensure_ascii=False))
-        .replace("__N_CONTEXT__", str(len(context)))
-        .replace("__INITIAL__", str(next(i for i, m in enumerate(methods) if m["key"] == initial)))
+        VIEWER_TEMPLATE.read_text(encoding="utf-8")
+        .replace("__THREE_VERSION__", THREE_VERSION)
+        .replace("__DATA_JSON__", payload)
     )
     html_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.write_text(page, encoding="utf-8")

@@ -1,12 +1,25 @@
-Mesh: 3904 köşe, 7560 üçgen | Çizge: 3543 düğüm, 10224 ayrıt | 361 düğüm yasak hacimler nedeniyle çıkarıldı | 11 kablo
+Mesh: 3904 köşe, 7560 üçgen | Çizge: 3475 düğüm, 10033 ayrıt | 429 düğüm yasak hacimler ve 0.05 m güvenlik payı nedeniyle çıkarıldı | 11 kablo
+Dönüş çizgesi: 20066 yönlü ayrıt, 51544 izinli dönüş (bükülme yarıçapı >= 0.1 m)
 
-Yöntem                          | Toplam uzunluk [m] | Benzersiz uzunluk [m] | Demetlenme oranı | EMC ihlali [nokta] | Bükülme ihlali | Yasak hacim ihlali | Kapasite ihlali [ayrıt] | Süre [s]
---------------------------------+--------------------+-----------------------+------------------+--------------------+----------------+--------------------+-------------------------+---------
-a) Baseline (bağımsız Dijkstra) |              61.23 |                 52.32 |            0.145 |                952 |              0 |                  0 |                      17 |     0.01
-b) Demetleme                    |              71.36 |                 17.72 |            0.752 |               5572 |             15 |                  0 |                     116 |     0.01
-c) EMC duyarlı demetleme        |              67.17 |                 34.56 |            0.486 |                  0 |             10 |                  0 |                      50 |     0.05
-d) Lagrange gevşetmesi (K=2)    |              61.27 |                 52.50 |            0.143 |                962 |              0 |                  0 |                       0 |     1.34
+Yöntem                                   | Toplam uzunluk [m] | Benzersiz uzunluk [m] | Demetlenme oranı | EMC ihlali [nokta] | Bükülme ihlali | Yasak hacim ihlali | Boşluk payı ihlali [nokta] | Kapasite ihlali [ayrıt] | Süre [s]
+-----------------------------------------+--------------------+-----------------------+------------------+--------------------+----------------+--------------------+----------------------------+-------------------------+---------
+a) Baseline (bağımsız Dijkstra)          |              61.66 |                 51.65 |            0.162 |                980 |              0 |                  0 |                          0 |                      20 |     0.00
+b) Demetleme                             |              71.84 |                 17.80 |            0.752 |               5660 |             15 |                  0 |                          0 |                     116 |     0.01
+c) EMC duyarlı demetleme                 |              66.18 |                 35.22 |            0.468 |                  0 |              8 |                  0 |                          0 |                      35 |     0.13
+d) Lagrange gevşetmesi (K=2)             |              61.76 |                 53.80 |            0.129 |                887 |              0 |                  0 |                          0 |                       0 |     0.93
+e) Bütünleşik (EMC + kapasite + bükülme) |              66.05 |                 40.80 |            0.382 |                  0 |              0 |                  0 |                          0 |                       0 |     0.10
 
-Lagrange: 56 iterasyon, alt sınır 61.27 m, üst sınır 61.27 m, fark %0.00
+Lagrange: 60 iterasyon, alt sınır 61.7624 m, üst sınır 61.7639 m, fark 0.0014 m (%0.002)
+Güvenlik payı olmadan kurulan çizgede baseline: 69 boşluk payı ihlali noktası.
 
-Çıktılar: outputs/, docs/  (toplam süre 37.3 s)
+Sağlamlık testi (20 deneme / deney, 36.8 s):
+| Deney | Yöntem | EMC ihlali 0 olan | EMC ort. / en çok [nokta] | Kapasite ort. / en çok [ayrıt] | Bükülme en çok | Tüm denetimler temiz |
+|:---|:---|---:|---:|---:|---:|---:|
+| Rastgele sıra | c) tek geçiş | 6/20 | 24.1 / 72 | 59.1 / 116 | 13 | 0/20 |
+| Rastgele sıra | c) + söküp yeniden rotalama | 20/20 | 0.0 / 0 | 70.7 / 116 | 18 | 0/20 |
+| Rastgele sıra | e) Bütünleşik | 16/20 | 1.6 / 10 | 0.0 / 0 | 0 | 16/20 |
+| Rastgele sıra + uç nokta sapması | c) tek geçiş | 7/20 | 15.8 / 55 | 57.5 / 108 | 10 | 0/20 |
+| Rastgele sıra + uç nokta sapması | c) + söküp yeniden rotalama | 20/20 | 0.0 / 0 | 52.4 / 110 | 16 | 0/20 |
+| Rastgele sıra + uç nokta sapması | e) Bütünleşik | 20/20 | 0.0 / 0 | 0.0 / 0 | 0 | 20/20 |
+
+Çıktılar: outputs/, docs/  (toplam süre 73.7 s)

@@ -24,6 +24,7 @@ class CheckReport:
     emc_points: int  # sampled route points closer than the required separation
     bend_points: int  # route vertices whose local bend radius is below the limit
     forbidden_points: int  # sampled route points inside a forbidden volume
+    clearance_points: int  # sampled route points outside a volume but closer than the clearance
     capacity_edges: int  # edges carrying more than K cables
 
     def as_dict(self) -> dict[str, int]:
@@ -104,6 +105,14 @@ def _inside_volume(points: np.ndarray, volume: object) -> np.ndarray:
     return np.all((points > lo) & (points < hi), axis=1)
 
 
+def distance_to_volume(points: np.ndarray, volume: object) -> np.ndarray:
+    """Euclidean distance from each point to the volume (0 inside), from raw parameters."""
+    if hasattr(volume, "radius"):
+        return np.maximum(np.linalg.norm(points - np.asarray(volume.center), axis=1) - volume.radius, 0.0)
+    lo, hi = np.asarray(volume.lo), np.asarray(volume.hi)
+    return np.linalg.norm(np.maximum(np.maximum(lo - points, points - hi), 0.0), axis=1)
+
+
 def count_forbidden_violations(
     polylines: Sequence[np.ndarray], volumes: Sequence[object], step: float = SAMPLE_STEP_M
 ) -> int:
@@ -115,6 +124,24 @@ def count_forbidden_violations(
         for vol in volumes:
             inside |= _inside_volume(s, vol)
         count += int(inside.sum())
+    return count
+
+
+def count_clearance_violations(
+    polylines: Sequence[np.ndarray], volumes: Sequence[object], clearance: float, step: float = SAMPLE_STEP_M
+) -> int:
+    """Count sampled route points outside every volume but closer than `clearance` to one of them."""
+    if clearance <= 0.0:
+        return 0
+    count = 0
+    for p in polylines:
+        s = resample_polyline(p, step)
+        inside = np.zeros(len(s), dtype=bool)
+        near = np.zeros(len(s), dtype=bool)
+        for vol in volumes:
+            inside |= _inside_volume(s, vol)
+            near |= distance_to_volume(s, vol) < clearance
+        count += int((near & ~inside).sum())
     return count
 
 
@@ -135,12 +162,14 @@ def run_all_checks(
     separation_fn: Callable[[str, str], float],
     min_bend_radius: float,
     capacity: int,
+    clearance: float = 0.0,
 ) -> CheckReport:
-    """Run all four checks on a set of node paths."""
+    """Run all five checks on a set of node paths."""
     polylines = [positions[np.asarray(p)] for p in node_paths]
     return CheckReport(
         emc_points=count_emc_violations(polylines, classes, separation_fn),
         bend_points=count_bend_violations(polylines, min_bend_radius),
         forbidden_points=count_forbidden_violations(polylines, volumes),
+        clearance_points=count_clearance_violations(polylines, volumes, clearance),
         capacity_edges=count_capacity_violations(node_paths, capacity),
     )
