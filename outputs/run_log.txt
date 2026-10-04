@@ -1,7 +1,3 @@
-C:\Users\user\harness-routing-demo\.venv\Lib\site-packages\plotly\io\_kaleido.py:185: UserWarning: The kopts argument is ignored if using a server.
-  img_bytes = kaleido.calc_fig_sync(
-C:\Users\user\harness-routing-demo\.venv\Lib\site-packages\plotly\io\_kaleido.py:433: UserWarning: The kopts argument is ignored if using a server.
-  kaleido.write_fig_from_object_sync(
 Mesh: 3904 köşe, 7560 üçgen | Çizge: 3543 düğüm, 10224 ayrıt | 361 düğüm yasak hacimler nedeniyle çıkarıldı | 11 kablo
 
 Yöntem                          | Toplam uzunluk [m] | Benzersiz uzunluk [m] | Demetlenme oranı | EMC ihlali [nokta] | Bükülme ihlali | Yasak hacim ihlali | Kapasite ihlali [ayrıt] | Süre [s]
@@ -13,4 +9,4 @@ d) Lagrange gevşetmesi (K=2)    |              61.27 |                 52.50 | 
 
 Lagrange: 56 iterasyon, alt sınır 61.27 m, üst sınır 61.27 m, fark %0.00
 
-Çıktılar: C:\Users\user\harness-routing-demo\outputs  (toplam süre 37.3 s)
+Çıktılar: outputs/, docs/  (toplam süre 37.3 s)

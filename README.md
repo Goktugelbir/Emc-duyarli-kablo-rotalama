@@ -50,7 +50,7 @@ Asıl projede problem kapasiteli Steiner ormanı olarak modellenip Lagrange gev�
   2 kablo bir yandan diğerine geçer). Komşu uç noktalar farklı sınıftandır ve birbirine yakındır,
   ancak aralarındaki mesafe gereken ayrım mesafesinden büyüktür.
 - Dört rotalama yöntemini çalıştırır, sonuçları rotalama kodundan bağımsız denetimlerle kontrol
-  eder, metrikleri tablo olarak yazar, her yöntem için 3B HTML/PNG ve Lagrange yöntemi için
+  eder, metrikleri tablo olarak yazar, her yöntem için 3B PNG, tek sayfalık etkileşimli 3B görünüm ve Lagrange yöntemi için
   yakınsama grafiği üretir.
 
 **Demo ne yapmıyor**
@@ -87,11 +87,11 @@ Python 3.11+ gerekir.
 pip install -r requirements.txt && python main.py
 ```
 
-Bu tek komut tüm çıktıları yeniden üretir: `outputs/` altındaki metrik tablosu, PNG/HTML
+Bu tek komut tüm çıktıları yeniden üretir: `outputs/` altındaki metrik tablosu, PNG
 görünümleri, `comparison.png`, `metrics_chart.png`, `demo.gif` ve `docs/index.html`. Bizim
 makinemizde toplam süre ~38 s'dir; bunun büyük kısmı görüntü dışa aktarımıdır (içe aktarma,
 mesh, rotalama ve denetimler birlikte ~3 s). PNG üretimi için `kaleido` 1.x sistemde kurulu
-bir Chrome/Chromium kullanır; yoksa `plotly_get_chrome` komutuyla indirilebilir. HTML dosyaları
+bir Chrome/Chromium kullanır; yoksa `plotly_get_chrome` komutuyla indirilebilir. `docs/index.html`
 plotly.js'i CDN'den yükler (görüntülemek için internet gerekir).
 
 Görüntülerle ilgili teknik notlar:
@@ -117,7 +117,7 @@ harness_demo/
   visualize.py   # plotly 3B görselleştirme ve yakınsama grafiği
   presentation.py# karşılaştırma görseli, döner GIF, metrik grafiği, etkileşimli sayfa
 main.py          # uçtan uca çalıştırma
-outputs/         # HTML, PNG, GIF, metrics.md, lagrangian_history.json, run_log.txt
+outputs/         # PNG, GIF, metrics.md, lagrangian_history.json, run_log.txt
 docs/index.html  # GitHub Pages için tek sayfalık etkileşimli 3B görünüm
 ```
 
@@ -221,8 +221,7 @@ süresidir (denetim ve çizim hariç); makineye göre değişir.
 
 ![Lagrange yakınsaması](outputs/lagrangian_convergence.png)
 
-Etkileşimli sürümler: `outputs/routes_*.html`, `outputs/lagrangian_convergence.html` ve
-`docs/index.html`. 3B görsellerde kabloların gövde yüzeyiyle çakışmaması ve üst üste binen
+Etkileşimli sürüm: [`docs/index.html`](docs/index.html) (dört yöntem tek sayfada). 3B görsellerde kabloların gövde yüzeyiyle çakışmaması ve üst üste binen
 kabloların ayırt edilebilmesi için her kablo yüzeyden içeri doğru 2–6 cm kaydırılarak
 çizilmiştir; bu kaydırma yalnızca görseldir, denetimlere ve metriklere girmez.
 

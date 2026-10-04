@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+import warnings
 from pathlib import Path
 
 import kaleido
@@ -42,6 +43,8 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")
     t_start = time.perf_counter()
     OUT_DIR.mkdir(exist_ok=True)
+    # plotly warns that per-call kaleido options are ignored while a shared server runs; that is intended.
+    warnings.filterwarnings("ignore", message="The kopts argument is ignored if using a server")
     kaleido.start_sync_server(n=4, silence_warnings=True)  # one headless browser (4 tabs) for all exports
 
     mesh = build_fuselage(PARAMS)
@@ -69,13 +72,10 @@ def main() -> None:
             paths, [c.emc_class for c in cables], graph.positions, volumes, separation, MIN_BEND_RADIUS_M, CAPACITY_K
         )
         rows.append(compute_metrics(res, graph, report))
-        plot_routes(
-            mesh, volumes, cables, res.routes, res.label,
-            OUT_DIR / f"routes_{res.method}.html", OUT_DIR / f"routes_{res.method}.png",
-        )
+        plot_routes(mesh, volumes, cables, res.routes, res.label, OUT_DIR / f"routes_{res.method}.png")
 
     lagr = results[-1]
-    plot_convergence(lagr.history, OUT_DIR / "lagrangian_convergence.png", OUT_DIR / "lagrangian_convergence.html")
+    plot_convergence(lagr.history, OUT_DIR / "lagrangian_convergence.png")
     write_presentation(mesh, volumes, cables, graph, results, rows)
     last = lagr.history[-1]
 
@@ -99,7 +99,7 @@ def main() -> None:
     ]
     (OUT_DIR / "metrics.md").write_text("\n".join(md), encoding="utf-8")
     (OUT_DIR / "lagrangian_history.json").write_text(json.dumps(lagr.history, indent=1), encoding="utf-8")
-    print(f"\nÇıktılar: {OUT_DIR}  (toplam süre {time.perf_counter() - t_start:.1f} s)")
+    print(f"\nÇıktılar: {OUT_DIR.name}/, {DOCS_DIR.name}/  (toplam süre {time.perf_counter() - t_start:.1f} s)")
 
 
 def write_presentation(

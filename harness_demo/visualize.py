@@ -103,16 +103,14 @@ def plot_routes(
     cables: list[Cable],
     routes: dict[str, list[int]],
     title: str,
-    html_path: Path,
     png_path: Path,
 ) -> None:
-    """Write an interactive HTML and a static PNG of one routing solution."""
+    """Write a static PNG of one routing solution."""
     fig = route_figure(mesh, volumes, cables, routes, title)
-    fig.write_html(html_path, include_plotlyjs="cdn")
     fig.write_image(png_path, width=1200, height=800, scale=1)
 
 
-def plot_convergence(history: list[dict[str, float]], png_path: Path, html_path: Path | None = None) -> None:
+def plot_convergence(history: list[dict[str, float]], png_path: Path) -> None:
     """Lower (dual) and upper (feasible) bound per subgradient iteration."""
     it = [h["iteration"] for h in history]
     fig = go.Figure()
@@ -133,6 +131,4 @@ def plot_convergence(history: list[dict[str, float]], png_path: Path, html_path:
         hovermode="x unified",
         margin={"l": 70, "r": 20, "t": 50, "b": 60},
     )
-    if html_path is not None:
-        fig.write_html(html_path, include_plotlyjs="cdn")
     fig.write_image(png_path, width=900, height=500, scale=1)
