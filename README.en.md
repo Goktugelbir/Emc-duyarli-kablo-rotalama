@@ -7,7 +7,8 @@
 **An integrated router that bundles cables while respecting EMC separation, edge capacity, the minimum
 bend radius and a clearance around keep-out volumes reduces the 5660 EMC violation points, 116 capacity
 violations and 15 bend violations created by bundling in this scenario to zero, while keeping the
-bundling ratio at 0.382.**
+bundling ratio at 0.382.** In the integrated solution's wirelist ([`outputs/wirelist.csv`](outputs/wirelist.csv)) each
+of the 11 cables is verified individually with the independent checks: all `OK`, tightest EMC margin +3.9 cm.
 
 ![Bundling vs. integrated routing: same scenario, same camera](outputs/comparison.png)
 
@@ -35,8 +36,9 @@ The page is rendered with three.js using physically based materials, environment
   panel) and their boundaries grown by the clearance (dashed red lines),
 - **Play routing:** cables are laid one by one in the order in which the method last routed them (rip-up and
   reroute included); violation points and clamps appear at the end,
-- hovering a cable shows its name, class and route length; clicking it shows a translucent envelope as wide as
-  the largest separation required to the other classes,
+- hovering a cable shows its name, class, route length and **verification margins** (EMC separation margin,
+  smallest bend radius, distance to keep-out, `OK`/`CHECK`); clicking it shows the equipment it connects and a
+  translucent envelope as wide as the largest separation required to the other classes,
 - seven check results per method (EMC, bend, keep-out, clearance, capacity violations and the lengths),
 - camera presets (inside, below, outside, top), toggleable layers and an automatically widened field of view
   on narrow screens.
@@ -90,8 +92,10 @@ five methods.
 - Runs five routing methods and checks the results with five checks that are independent of the routing code.
 - Measures how sensitive the sequential methods are to cable order and terminal positions with a
   40-trial **robustness benchmark**.
-- Writes the metrics as a table and produces a 3D PNG per method, a comparison image, a rotating GIF,
-  a metrics chart, a Lagrangian convergence plot, the interactive 3D page and a run log.
+- Writes the metrics as a table and exports a wirelist (`wirelist.csv`, with per-cable verification margins)
+  and all routes as 3D polylines (`routes.json`).
+- Produces a 3D image per method, a comparison image, a routing animation (GIF), a metrics chart, a Lagrangian
+  convergence plot, the interactive 3D page and a run log.
 
 **What the demo does not do**
 
@@ -140,8 +144,9 @@ python main.py
 
 This command regenerates all outputs: the metrics and robustness tables under `outputs/`, the 3D images
 (`routes_*.png`, `comparison.png`, `viewer_inside.png`, `demo.gif`), the 2D charts (`metrics_chart.png`,
-`lagrangian_convergence.png`), `run_log.txt` and `docs/index.html`. On our machine the total time is ~65 s:
-~37 s robustness benchmark, ~22 s capturing the 3D images, ~4 s 2D charts and ~2 s for mesh, routing and checks.
+`lagrangian_convergence.png`), `wirelist.csv`, `routes.json`, `run_log.txt` and `docs/index.html`. On our
+machine the total time is ~40 s: ~11 s robustness benchmark, ~25 s capturing the 3D images, ~2 s 2D charts and
+~2 s for mesh, routing, checks and exports. `--no-images` skips the images (~10–20 s).
 
 Image export uses a Chrome/Chromium installed on the system (if there is none, it can be downloaded with the
 `plotly_get_chrome` command). Since the 3D images are captured from the interactive page and the page loads
@@ -158,6 +163,7 @@ three.js from a CDN, this step needs an **internet connection**; viewing `docs/i
 | `--capacity K` | 2 | edge capacity |
 | `--clearance M` | 0.05 | keep-out clearance [m] |
 | `--order STR` | `input` | cable priority ordering strategy (`input`, `critical-first`, `longest-first`, `shortest-first`) |
+| `--workers N` | 4 on Linux, 1 on Windows/macOS | parallel processes for the robustness benchmark; the result does not depend on it |
 
 For example, to produce only the metrics and the page in a few seconds:
 
@@ -177,27 +183,41 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-There are 35 tests under [`tests/`](tests) (~7 s):
+There are 45 tests under [`tests/`](tests) (~12 s; one is optional, see below):
 
 - **Checks** (`test_checks.py`): circumradius, resampling, EMC, bend, capacity, keep-out and clearance
   counts on small examples that can be worked out by hand.
 - **Geometry and graph** (`test_geometry_graph.py`): the grown volume contains the clearance
-  neighbourhood, routable nodes respect the clearance, no edge enters a volume, connectivity, symmetry.
+  neighbourhood, routable nodes respect the clearance, no edge enters a volume, connectivity, symmetry; the
+  vectorised edge lookup ignores direction and rejects non-adjacent nodes; terminals get the right equipment.
 - **Routing** (`test_routing.py`): every path is valid (correct terminals, real edges); the baseline
   finds the same lengths as networkx; the turn graph contains no U-turns and no sharp turns; method (e)
   passes every check; rip-up and reroute keeps EMC violations at zero for random orders; the Lagrangian
   lower bound never decreases and never exceeds the upper bound; without a feasible solution the
-  Lagrangian fails cleanly instead of producing NaN.
+  Lagrangian fails cleanly instead of producing NaN; the ordering strategies sort correctly and an unknown
+  strategy is rejected.
+- **Exports** (`test_export.py`): wirelist columns and wire numbers; the verification margins agree with the
+  independent checks; `routes.json` is compact, complete and deterministic byte for byte.
 - **Robustness benchmark** (`test_benchmark.py`): the terminal perturbation never brings terminals of
-  different classes closer than their separation; structure of the summary table.
+  different classes closer than their separation; structure of the summary table; **the parallel run gives the
+  same result as the sequential one**; every benchmark router definition works.
+- **Viewer** (`test_viewer.py`): the generated page is self-contained (every part inlined); `viewer.js` passes a
+  Node.js syntax check (skipped without Node); every `D.<field>` the viewer reads is provided by the data Python
+  embeds; every `window.viewer` function `capture.py` calls exists. An optional test opens the page in headless
+  Chrome, goes through the five methods and asserts that no JavaScript error occurs (needs Chrome and internet:
+  `HARNESS_BROWSER_TESTS=1 pytest`).
 - **Regression** (`test_regression.py`): the published metrics table (below) is reproduced exactly.
 - **End to end** (`test_cli.py`): `main.py --no-images` writes every file, exports no PNG, the log has no
   local paths, the JSON is valid and the data embedded in the page is consistent.
 
-`pytest.ini` turns `RuntimeWarning` into errors, so NaN/infinite steps cannot slip through unnoticed.
-The GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the tests and a
-`python main.py --no-images --trials 3` smoke run with Python 3.11 on every push and pull request and keeps
-the outputs as an artifact.
+Test, lint and type-check settings live in [`pyproject.toml`](pyproject.toml). pytest turns `RuntimeWarning`
+into errors, so NaN/infinite steps cannot slip through unnoticed. The code is linted with
+[ruff](https://docs.astral.sh/ruff/) (`ruff check .`: pycodestyle, pyflakes, import order, bugbear, pyupgrade,
+simplify, ruff) and type-checked with [mypy](https://mypy-lang.org/) (`mypy`; no findings). The checks describe the
+keep-out volumes only by their shape through a `Protocol`, so they stay type-safe without importing the geometry
+module. The GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the lint, the type
+check, the tests and a `python main.py --no-images --trials 3 --workers 2` smoke run (parallel path included) with
+Python 3.11 on every push and pull request and keeps the outputs as an artifact.
 
 ### Technical notes on the images
 
@@ -213,6 +233,11 @@ the outputs as an artifact.
   pixel-level editing is done. In the GIF the camera is fixed and all frames share one palette (the EMC class
   colours are guaranteed to be in it), so the file only stores the regions that change and stays small (~200 KB).
 - The metrics chart and the Lagrangian convergence plot are drawn with plotly (`harness_demo/visualize.py`).
+- The viewer source is three files under [`harness_demo/viewer/`](harness_demo/viewer): the HTML skeleton
+  (`template.html`), the styles (`viewer.css`) and the three.js code (`viewer.js`, an ES module). `presentation.py`
+  assembles them together with the data into a single `docs/index.html`, so the page works both from GitHub Pages and
+  from the file system. The page collects runtime JavaScript errors in `window.__viewerErrors`; the browser test
+  asserts that it stays empty.
 
 ## Project structure
 
@@ -220,22 +245,29 @@ the outputs as an artifact.
 harness_demo/
   geometry.py    # parametric half-cylinder mesh + keep-out volumes (box, sphere), growing by a clearance
   graph.py       # mesh -> routing graph (networkx), keep-out node/edge removal, CSR export
-  scenarios.py   # synthetic 11-cable scenario, EMC separation table, terminal perturbation
-  routing.py     # 5 methods: baseline, bundling, EMC-aware, Lagrangian, integrated; turn graph
-  checks.py      # independent checks (do not use the routing code)
+  scenarios.py   # synthetic 11-cable scenario, EMC separation table, equipment locations, terminal perturbation
+  routing/       # the 5 routing methods (one public API: from harness_demo.routing import ...)
+    core.py        # result type, Dijkstra, route sampling, a) baseline
+    turn_graph.py  # bend-aware turn graph
+    sequential.py  # b) bundling, c) EMC-aware, e) integrated; rip-up and reroute
+    lagrangian.py  # d) Lagrangian relaxation
+  checks.py      # independent checks (do not use the routing code) and check settings
   metrics.py     # metrics and table formatting
-  benchmark.py   # robustness benchmark: random cable order and terminal perturbation
+  benchmark.py   # robustness benchmark: random cable order and terminal perturbation (optionally parallel)
   visualize.py   # 2D charts (plotly): metrics chart, Lagrangian convergence
-  presentation.py# interactive page: embeds the results as JSON into the viewer template
-  viewer_template.html # three.js-based interactive 3D viewer template (capture mode included)
+  presentation.py# interactive page: assembles the viewer and the results into one HTML file
+  viewer/        # three.js viewer source: template.html, viewer.css, viewer.js (capture mode included)
   capture.py     # captures the README 3D images from the page with headless Chrome (PNG + GIF)
-  export.py      # wirelist (CSV) and 3D route coordinates (JSON) exports
-main.py          # end-to-end run, command-line options
-tests/           # pytest tests (35 tests)
-outputs/         # 3D images (PNG, GIF), 2D charts, wirelist.csv, routes.json, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+  export.py      # wirelist (wirelist.csv, with verification margins) and 3D routes (routes.json)
+main.py          # end-to-end run: build_model -> route_all -> report_metrics -> write_exports
+                 #   -> run_benchmark -> write_presentation; command-line options
+tests/           # pytest tests (45 tests; one is an optional browser test)
+outputs/         # 3D images (PNG, GIF), 2D charts, wirelist.csv, routes.json, metrics.md, robustness.md,
+                 # lagrangian_history.json, run_log.txt
 docs/index.html  # single-page interactive 3D view for GitHub Pages
-.github/workflows/ci.yml   # tests + smoke run
-requirements.txt / requirements-dev.txt   # pinned versions
+.github/workflows/ci.yml   # lint + type check + tests + smoke run
+pyproject.toml   # pytest, ruff and mypy settings
+requirements.txt / requirements-dev.txt   # pinned versions (development: pytest, ruff, mypy)
 ```
 
 ## Methods
@@ -329,9 +361,9 @@ Output of `python main.py` (same as `outputs/metrics.md`):
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | a) Baseline (independent Dijkstra) | 61.66 | 51.65 | 0.162 | 980 | 0 | 0 | 0 | 20 | 0.00 |
 | b) Bundling | 71.84 | 17.80 | 0.752 | 5660 | 15 | 0 | 0 | 116 | 0.01 |
-| c) EMC-aware bundling | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.12 |
-| d) Lagrangian relaxation (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.91 |
-| e) Integrated (EMC + capacity + bend) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.09 |
+| c) EMC-aware bundling | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.03 |
+| d) Lagrangian relaxation (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.74 |
+| e) Integrated (EMC + capacity + bend) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.06 |
 
 ![Bundling ratio, EMC violations and capacity violations per method](outputs/metrics_chart.png)
 
@@ -392,6 +424,103 @@ rotalama" = rip-up and reroute):
   points remain: the tight capacity, the bend constraint and EMC separation conflict for some orders.
   Since the penalty is soft, zero violations are not guaranteed.
 
+### Cable ordering strategies (`--order`)
+
+`--order` selects the order of the first pass of the sequential methods (b, c, e): `input` (scenario order,
+default), `critical-first` (power, then data, then signal; longest cable first within a class), `longest-first`
+and `shortest-first` (by the straight distance between the terminals). Measured with the independent checks in
+this scenario:
+
+| Strategy | c) EMC / capacity / bend | c) total length | e) EMC / capacity / bend | e) total length |
+|:---|:---:|---:|:---:|---:|
+| `input` | 0 / 35 / 8 | 66.18 m | 0 / 0 / 0 | 66.05 m |
+| `critical-first` | 0 / 93 / 9 | 72.07 m | 0 / 0 / 0 | 72.00 m |
+| `longest-first` | 0 / 93 / 9 | 72.07 m | 0 / 0 / 0 | 72.00 m |
+| `shortest-first` | 0 / 110 / 9 | 79.46 m | 0 / 0 / 0 | 76.73 m |
+
+The integrated method passes every check with every strategy, but in this scenario no strategy beats the default
+order: cables get 6–11 m longer and the capacity violations of (c) increase. (`critical-first` and
+`longest-first` produce different orders but reach the same solution for c) and e) after rip-up and reroute.)
+What really reduces the order dependence is rip-up and reroute, as the robustness benchmark above shows; the
+strategies are an option for experiments.
+
+## Exports: wirelist and route file
+
+`python main.py` also writes two machine-readable files ([`harness_demo/export.py`](harness_demo/export.py)).
+
+**[`outputs/wirelist.csv`](outputs/wirelist.csv): the wirelist.** One row per cable of the integrated method (e).
+Like a production wirelist it lists terminals and length; in addition it recomputes each cable's own
+verification margins from geometry with the building blocks of the independent checks:
+
+| Column | Meaning |
+|:---|:---|
+| `wire_id`, `cable_name`, `emc_class` | wire number (W01…), name, EMC class |
+| `from_location`, `to_location` | equipment it connects, e.g. `Arka raf (sağ)` (aft rack, right) → `Ön panel (sol)` (forward panel, left) |
+| `from_node`, `from_x_m` … `to_z_m` | terminal nodes and their coordinates [m] |
+| `length_m`, `waypoint_count` | route length and number of points |
+| `bundled_with`, `shared_length_m`, `sharing_ratio` | cables it shares its route with, shared length and ratio |
+| `min_emc_margin_m` | distance to the nearest cable of another class − required separation; < 0 = EMC violation |
+| `min_bend_radius_m` | smallest three-point circumradius along the route; < 0.10 m = bend violation |
+| `min_keepout_distance_m` | smallest distance to a keep-out volume; < 0.05 m = clearance violation |
+| `status` | `OK` if every margin holds, otherwise `CHECK` |
+
+In this scenario all 11 cables are `OK`. Sample rows:
+
+| Cable | From → to | Length | Bundle | EMC margin | Min. R | To keep-out | Status |
+|:---|:---|---:|:---|---:|---:|---:|:---:|
+| W01 P1 (power) | aft rack (right) → fwd panel (right) | 5.82 m | P2 | +13.1 cm | 0.122 m | 9.3 cm | OK |
+| W05 D1 (data) | aft rack (right) → fwd panel (right) | 5.53 m | D2, D3 | +3.9 cm | 0.142 m | 7.7 cm | OK |
+| W10 D3 (data) | aft rack (right) → fwd panel (left) | 6.33 m | D1 | +8.7 cm | 0.112 m | 8.1 cm | OK |
+| W11 S4 (signal) | aft rack (left) → fwd panel (right) | 7.86 m | S2, S3 | +3.9 cm | 0.119 m | 8.9 cm | OK |
+
+The tightest EMC margin is +3.9 cm (between D1 and S4). A test ties the margins to the independent checks: in
+the integrated solution all cables are `OK`, and in the bundling solution exactly the cables with a negative EMC
+margin are marked `CHECK`. The same margins are shown in the tooltip of the 3D page.
+
+**[`outputs/routes.json`](outputs/routes.json): all routes.** Every cable of all five methods, for CAD/ECAD import
+or further analysis. Per cable: `waypoints_xyz` (3D polyline through mesh vertices on the fuselage skin,
+metres), `node_ids`, terminal equipment, length and bundle data; per method: the routing order and the check
+results; plus the run parameters (capacity, bend radius, clearance, separation table, ordering strategy), units
+and coordinate frame. The points are the raw routes the checks evaluate; the lifted, smoothed look of the 3D page
+is visual only and is not in the file.
+
+The file is compact and deterministic: every array is on one line (~700 lines, ~110 KB; the previous version was
+~20,000 lines, ~395 KB) and it contains no run-dependent value such as timings. The same inputs reproduce it byte
+for byte (a test checks this), so git only shows real changes.
+
+## Performance
+
+The computational core was sped up after profiling. Results are **bit-identical**: on top of the regression tests,
+the sampling functions and every route of all five methods were compared against the previous version.
+
+- Route sampling (`routing.densify`, `checks.resample_polyline`) and the bend check use vector operations
+  instead of Python loops; numpy's `linspace` arithmetic is reproduced exactly. (The two sampling functions are
+  separate on purpose: the checks must not depend on the routing code they verify.)
+- The route geometry that sequential routing recomputes for every cable and every reroute round (unique edges,
+  samples, KD-trees, nearby nodes) is cached by the route itself.
+- Edge lookup is vectorised with `searchsorted` on sorted keys instead of a dictionary.
+- The headless browser for the 2D charts only starts when the charts are drawn, so it never affects the reported
+  routing times.
+
+| | Before | After |
+|:---|---:|---:|
+| Robustness benchmark (40 trials × 3 methods) | 28–41 s | 9–18 s |
+| `python main.py --no-images` | 30–45 s | 10–21 s |
+| `python main.py` (all outputs, images included) | ~65 s | ~40 s |
+
+The measurements are consecutive runs on the same laptop; absolute times vary with the machine's load, but the
+speed-up is 2–3× in every comparison.
+
+**Parallel robustness benchmark.** The trials are independent, so `--workers N` runs them in separate processes.
+The trials are drawn in the parent process, so the result does not depend on the number of workers (a test checks
+this). The gain depends on the platform, though. On Windows (and macOS) processes start with `spawn` and every worker
+re-imports numpy, scipy, networkx and trimesh (~1.5–2 s per worker), which eats most of the gain of a ~10 s
+benchmark: on this machine 10.2 s sequential vs. 8.8 s with 4 workers. Threads only gave ~1.3× because of the GIL
+and are not used. The default is therefore 1 on Windows/macOS and 4 on Linux, where processes fork cheaply. The Linux
+speed-up could not be measured on this machine; CI runs the parallel path on Linux for correctness.
+
+Most of the remaining time is spent in scipy's Dijkstra (~0.5 ms per call) and in capturing the images.
+
 ## All methods
 
 | a) Baseline | b) Bundling |
@@ -427,10 +556,12 @@ and equipment racks are visual as well.
   as a decision variable that changes the separation requirement and has a cost/weight.
 - **Clamp spacing:** Support points must be placeable along the route at allowed intervals;
   proximity to suitable structural attachment points.
-- **Cable order:** The robustness benchmark measures the order sensitivity of sequential methods. In the
-  real project, ordering heuristics or fully simultaneous (Lagrangian-based) methods can reduce it.
+- **Cable order:** The robustness benchmark measures the order sensitivity of sequential methods; the simple
+  ordering heuristics available through `--order` did not beat the default order in this scenario. In the real
+  project, fully simultaneous (Lagrangian-based) methods can reduce the dependence.
 - **Real geometry and export to CAD:** Importing real mesh/CAD data and exporting the resulting
-  routes back to the CAD environment (e.g. STEP/line geometry).
+  routes back to the CAD environment (e.g. STEP/line geometry). `routes.json` is the first step: it provides
+  the routes as 3D polylines with units and coordinate frame.
 
 ---
 

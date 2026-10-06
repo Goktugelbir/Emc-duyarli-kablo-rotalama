@@ -48,6 +48,18 @@ class Cable:
     emc_class: str
     start: int
     end: int
+    from_location: str = ""  # equipment the start terminal belongs to (see `equipment_location`)
+    to_location: str = ""
+
+
+EQUIPMENT_SPLIT_X_M = 3.0  # terminals aft of this station belong to the aft racks, the others to the forward panels
+
+
+def equipment_location(x: float, theta_deg: float) -> str:
+    """Equipment a terminal belongs to: aft rack or forward panel, right (theta < 90 deg) or left side."""
+    end = "Arka raf" if x < EQUIPMENT_SPLIT_X_M else "Ön panel"
+    side = "sağ" if theta_deg < 90.0 else "sol"
+    return f"{end} ({side})"
 
 
 # Two equipment clusters per side; neighbouring terminals of different classes
@@ -77,7 +89,8 @@ def build_scenario(graph: RoutingGraph, radius: float, specs: list[CableSpec] = 
     for s in specs:
         start = graph.nearest_node(surface_point(*s.start_xt, radius))
         end = graph.nearest_node(surface_point(*s.end_xt, radius))
-        cables.append(Cable(s.name, s.emc_class, start, end))
+        cables.append(Cable(s.name, s.emc_class, start, end,
+                            equipment_location(*s.start_xt), equipment_location(*s.end_xt)))
     return cables
 
 

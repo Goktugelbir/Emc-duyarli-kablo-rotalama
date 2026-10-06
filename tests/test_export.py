@@ -1,61 +1,79 @@
-"""Tests for harness_demo/export.py: wirelist CSV and routes JSON exports."""
+"""Exports: wirelist CSV (with verification margins) and the compact, deterministic routes JSON."""
 
 from __future__ import annotations
 
 import csv
 import json
 
-from harness_demo.export import export_routes_json, export_wirelist_csv, generate_wirelist_records
+import pytest
+
+import main
+from harness_demo.checks import CheckSettings
+from harness_demo.export import (
+    WIRELIST_COLUMNS,
+    export_routes_json,
+    export_wirelist_csv,
+    generate_wirelist_records,
+)
+from harness_demo.scenarios import separation
 
 
-def test_generate_wirelist_records(graph, cables, results):
-    integrated = results["integrated"]
-    records = generate_wirelist_records(graph, cables, integrated.routes)
+@pytest.fixture(scope="module")
+def settings(volumes):
+    return CheckSettings(volumes, separation, main.MIN_BEND_RADIUS_M, main.CAPACITY_K, main.CLEARANCE_M)
 
-    assert len(records) == len(cables)
-    names = [r["cable_name"] for r in records]
-    assert names == [c.name for c in cables]
 
-    for r in records:
-        assert r["length_m"] > 0
-        assert r["waypoint_count"] >= 2
+def test_wirelist_records(graph, cables, results, settings):
+    records = generate_wirelist_records(graph, cables, results["integrated"].routes, settings)
+    assert [r["cable_name"] for r in records] == [c.name for c in cables]
+    assert [r["wire_id"] for r in records] == [f"W{k:02d}" for k in range(1, len(cables) + 1)]
+    for r, c in zip(records, cables):
+        assert tuple(r) == WIRELIST_COLUMNS
+        assert r["length_m"] > 0 and r["waypoint_count"] >= 2
         assert 0.0 <= r["sharing_ratio"] <= 1.0
-        assert r["from_node"] in range(graph.n_nodes)
-        assert r["to_node"] in range(graph.n_nodes)
+        assert (r["from_location"], r["to_location"]) == (c.from_location, c.to_location)
+        assert c.name not in r["bundled_with"]
 
 
-def test_export_wirelist_csv(tmp_path, graph, cables, results):
-    csv_file = tmp_path / "wirelist.csv"
-    integrated = results["integrated"]
-    records = generate_wirelist_records(graph, cables, integrated.routes)
-    export_wirelist_csv(records, csv_file)
+def test_wirelist_margins_agree_with_independent_checks(graph, cables, results, metrics, settings):
+    """A cable is flagged exactly when the independent checks find a violation on the route set."""
+    clean = generate_wirelist_records(graph, cables, results["integrated"].routes, settings)
+    assert all(r["status"] == "OK" for r in clean)
+    assert all(r["min_emc_margin_m"] >= 0 and r["min_bend_radius_m"] >= main.MIN_BEND_RADIUS_M
+               and r["min_keepout_distance_m"] >= main.CLEARANCE_M for r in clean)
 
-    assert csv_file.is_file()
-    with open(csv_file, mode="r", encoding="utf-8") as f:
-        reader = list(csv.DictReader(f))
-    assert len(reader) == len(cables)
-    assert set(reader[0].keys()) == {
-        "cable_name", "emc_class", "from_node", "from_x_m", "from_y_m", "from_z_m",
-        "to_node", "to_x_m", "to_y_m", "to_z_m", "length_m", "waypoint_count",
-        "bundled_with", "shared_length_m", "sharing_ratio",
-    }
+    bundled = generate_wirelist_records(graph, cables, results["bundled"].routes, settings)
+    assert metrics["bundled"]["emc_points"] > 0
+    assert any(r["min_emc_margin_m"] < 0 for r in bundled)
+    assert all((r["status"] == "CHECK") == (r["min_emc_margin_m"] < 0 or r["min_bend_radius_m"] < 0.1)
+               for r in bundled)
 
 
-def test_export_routes_json(tmp_path, graph, cables, results):
-    json_file = tmp_path / "routes.json"
-    integrated = results["integrated"]
-    export_routes_json(graph, cables, integrated, json_file)
+def test_wirelist_csv(tmp_path, graph, cables, results, settings):
+    path = tmp_path / "wirelist.csv"
+    export_wirelist_csv(generate_wirelist_records(graph, cables, results["integrated"].routes, settings), path)
+    with path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == len(cables)
+    assert tuple(rows[0]) == WIRELIST_COLUMNS
+    assert rows[0]["bundled_with"] == "P2"  # P1 and P2 share their route
 
-    assert json_file.is_file()
-    with open(json_file, mode="r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    assert "methods" in data
-    assert "integrated" in data["methods"]
-    method_data = data["methods"]["integrated"]
-    assert len(method_data["cables"]) == len(cables)
+def test_routes_json_is_compact_complete_and_deterministic(tmp_path, graph, cables, results, metrics):
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    rows = list(metrics.values())
+    export_routes_json(graph, cables, list(results.values()), a, rows=rows, parameters={"capacity_k": 2})
+    export_routes_json(graph, cables, list(results.values()), b, rows=rows, parameters={"capacity_k": 2})
+    assert a.read_bytes() == b.read_bytes()  # no timings or other run-dependent values
 
-    first_cable = method_data["cables"][0]
-    assert "waypoints_xyz" in first_cable
-    assert len(first_cable["waypoints_xyz"]) == first_cable["waypoint_count"]
-    assert len(first_cable["waypoints_xyz"][0]) == 3
+    text = a.read_text(encoding="utf-8")
+    assert len(text.splitlines()) < 1000  # arrays stay on one line
+    data = json.loads(text)
+    assert data["units"] == "m" and data["parameters"]["capacity_k"] == 2
+    assert set(data["methods"]) == set(results)
+    for key, m in data["methods"].items():
+        assert m["checks"]["emc_points"] == metrics[key]["emc_points"]
+        assert isinstance(m["checks"]["emc_points"], int)
+        for c in m["cables"]:
+            assert len(c["waypoints_xyz"]) == len(c["node_ids"]) == len(results[key].routes[c["name"]])
+            assert all(len(p) == 3 for p in c["waypoints_xyz"])

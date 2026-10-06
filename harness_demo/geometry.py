@@ -32,8 +32,9 @@ def surface_point(x: float, theta_deg: float, radius: float) -> np.ndarray:
     return np.array([x, radius * np.cos(t), radius * np.sin(t)])
 
 
-def build_fuselage(params: FuselageParams = FuselageParams()) -> trimesh.Trimesh:
+def build_fuselage(params: FuselageParams | None = None) -> trimesh.Trimesh:
     """Build the triangulated half-cylinder surface (theta in [0, pi])."""
+    params = params or FuselageParams()
     xs = np.linspace(0.0, params.length, params.n_axial)
     ts = np.linspace(0.0, np.pi, params.n_circ)
     grid_x, grid_t = np.meshgrid(xs, ts, indexing="ij")
@@ -55,8 +56,8 @@ def build_fuselage(params: FuselageParams = FuselageParams()) -> trimesh.Trimesh
     )
 
     nc = params.n_circ
-    i, j = np.meshgrid(np.arange(params.n_axial - 1), np.arange(nc - 1), indexing="ij")
-    i, j = i.ravel(), j.ravel()
+    gi, gj = np.meshgrid(np.arange(params.n_axial - 1), np.arange(nc - 1), indexing="ij")
+    i, j = gi.ravel(), gj.ravel()
     v00, v10 = i * nc + j, (i + 1) * nc + j
     v01, v11 = v00 + 1, v10 + 1
     # Alternate the quad diagonal (checkerboard) so both diagonal directions exist.
@@ -81,11 +82,10 @@ class BoxVolume:
         p = np.atleast_2d(points)
         return np.all((p > np.asarray(self.lo)) & (p < np.asarray(self.hi)), axis=1)
 
-    def inflated(self, margin: float) -> "BoxVolume":
+    def inflated(self, margin: float) -> BoxVolume:
         """Box grown by `margin` on every side (conservative clearance envelope)."""
-        lo = tuple(v - margin for v in self.lo)
-        hi = tuple(v + margin for v in self.hi)
-        return replace(self, lo=lo, hi=hi)
+        (x0, y0, z0), (x1, y1, z1) = self.lo, self.hi
+        return replace(self, lo=(x0 - margin, y0 - margin, z0 - margin), hi=(x1 + margin, y1 + margin, z1 + margin))
 
     def to_mesh(self) -> trimesh.Trimesh:
         """Triangle mesh of the box, for visualisation."""
@@ -107,7 +107,7 @@ class SphereVolume:
         p = np.atleast_2d(points)
         return np.linalg.norm(p - np.asarray(self.center), axis=1) < self.radius
 
-    def inflated(self, margin: float) -> "SphereVolume":
+    def inflated(self, margin: float) -> SphereVolume:
         """Sphere grown by `margin` (exact clearance envelope)."""
         return replace(self, radius=self.radius + margin)
 

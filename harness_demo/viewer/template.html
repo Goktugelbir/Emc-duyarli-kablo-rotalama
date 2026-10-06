@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kablo Demeti 3B</title>
+<meta name="description" content="Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle EMC duyarlı rotalanması — etkileşimli 3B görünüm.">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/examples/jsm/"
+} }
+</script>
+<style>
+__STYLE__</style>
+</head>
+<body>
+<main>
+  <h1>Kablo demeti rotalama — etkileşimli 3B görünüm</h1>
+  <p class="lead">Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle rotalanması. Sürükleyerek döndürün,
+     tekerlekle yakınlaşın, bir kablonun üzerine gelince bilgisini görün, tıklayınca EMC ayrım zarfını açın.</p>
+  <div class="tabs" role="tablist" id="tabs" aria-label="Rotalama yöntemi"></div>
+  <div class="stats" id="stats" aria-live="polite"></div>
+  <div class="viewer" id="viewer">
+    <div class="loading" id="loading">3B görünüm yükleniyor…</div>
+    <div class="hud caption" id="caption"></div>
+    <div class="hud status" id="status" aria-live="polite"></div>
+    <div class="hud legend" id="legend"></div>
+    <div class="hud playbar"><button type="button" id="play">▶ Rotalamayı oynat</button></div>
+    <div class="tip" id="tip"></div>
+  </div>
+  <div class="controls">
+    <div class="chips" id="chips"></div>
+    <div class="views" id="views"><span class="lbl-t">Görünüm:</span></div>
+  </div>
+  <div class="selinfo" id="selinfo"></div>
+  <footer>
+    Tüm değerler temsilîdir ve <code>python main.py</code> çıktısından üretilmiştir; gerçek uçak verisi kullanılmamıştır.
+    Kablo güzergâhları, ihlal noktaları ve metrikler doğrudan rotalama ve bağımsız denetim sonuçlarıdır.
+    Kesikli kırmızı çizgiler yasak hacimlerin güvenlik payıyla büyütülmüş sınırıdır.
+    Gerçekçilik için eklenen öğeler — frame/stringer yapısı, zemin, kelepçeler, konnektörler, ekipman rafları,
+    kabloların yüzeyden ~10 cm kaldırılıp demet içinde yan yana dizilmesi ve köşelerinin yumuşatılması — yalnızca
+    görseldir; denetimlere ve metriklere girmez. Kablo kalınlıkları temsilîdir.
+  </footer>
+</main>
+
+<script id="data" type="application/json">__DATA_JSON__</script>
+<script>
+  // Runtime errors are collected for automated checks (tests, README image capture).
+  window.__viewerErrors = [];
+  addEventListener("error", e => window.__viewerErrors.push(String(e.message || e)));
+  addEventListener("unhandledrejection", e => window.__viewerErrors.push(String(e.reason)));
+  // Shown when the three.js module cannot be loaded (offline or blocked CDN).
+  setTimeout(() => {
+    if (!window.__viewerReady) document.getElementById("loading").textContent =
+      "3B kütüphanesi (three.js) yüklenemedi. Bu sayfa internet bağlantısı gerektirir.";
+  }, 12000);
+</script>
+<script type="module">
+__SCRIPT__</script>
+</body>
+</html>

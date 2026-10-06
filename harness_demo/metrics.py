@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from .checks import CheckReport
 from .graph import RoutingGraph
 from .routing import RoutingResult
+
+Row = dict[str, Any]  # one metric row per method (heterogeneous values: label, floats, counts)
 
 # (key, header, format)
 COLUMNS: list[tuple[str, str, str]] = [
@@ -23,7 +27,7 @@ COLUMNS: list[tuple[str, str, str]] = [
 ]
 
 
-def compute_metrics(result: RoutingResult, graph: RoutingGraph, report: CheckReport) -> dict[str, object]:
+def compute_metrics(result: RoutingResult, graph: RoutingGraph, report: CheckReport) -> Row:
     """Length, bundling and violation metrics for one method."""
     edge_sets = [graph.path_edge_ids(p) for p in result.routes.values()]
     total = float(sum(graph.lengths[e].sum() for e in edge_sets))
@@ -39,23 +43,24 @@ def compute_metrics(result: RoutingResult, graph: RoutingGraph, report: CheckRep
     }
 
 
-def _cells(rows: list[dict[str, object]]) -> list[list[str]]:
+def _cells(rows: list[Row]) -> list[list[str]]:
     """Formatted cell strings for every row."""
     return [[fmt.format(r[key]) for key, _, fmt in COLUMNS] for r in rows]
 
 
-def format_console_table(rows: list[dict[str, object]]) -> str:
+def format_console_table(rows: list[Row]) -> str:
     """Fixed-width plain-text table."""
     headers = [h for _, h, _ in COLUMNS]
     cells = _cells(rows)
     widths = [max(len(h), *(len(c[i]) for c in cells)) for i, h in enumerate(headers)]
     line = "-+-".join("-" * w for w in widths)
     out = [" | ".join(h.ljust(w) for h, w in zip(headers, widths)), line]
-    out += [" | ".join(c.ljust(w) if i == 0 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths))) for row in cells]
+    for row in cells:
+        out.append(" | ".join(c.ljust(w) if i == 0 else c.rjust(w) for i, (c, w) in enumerate(zip(row, widths))))
     return "\n".join(out)
 
 
-def format_markdown_table(rows: list[dict[str, object]]) -> str:
+def format_markdown_table(rows: list[Row]) -> str:
     """GitHub-flavoured Markdown table."""
     headers = [h for _, h, _ in COLUMNS]
     out = ["| " + " | ".join(headers) + " |", "|" + "|".join([":---"] + ["---:"] * (len(headers) - 1)) + "|"]

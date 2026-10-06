@@ -10,6 +10,8 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from .metrics import Row
+
 # Categorical slots 1-3 of a colour-blind-validated palette; red is reserved for keep-out volumes.
 CLASS_COLORS: dict[str, str] = {"power": "#eb6834", "signal": "#2a78d6", "data": "#1baf7a"}
 BAR_COLOR = "#2a78d6"
@@ -51,7 +53,7 @@ def plot_convergence(history: list[dict[str, float]], png_path: Path) -> None:
     fig.write_image(png_path, width=900, height=500, scale=1)
 
 
-def plot_metrics_chart(rows: list[dict[str, object]], png_path: Path) -> None:
+def plot_metrics_chart(rows: list[Row], png_path: Path) -> None:
     """Three bar panels: bundling ratio, EMC violation points and capacity violations per method."""
     labels = [SHORT_LABELS.get(str(r["method"]), str(r["label"])) for r in rows]
     ratio = [float(r["bundling_ratio"]) for r in rows]

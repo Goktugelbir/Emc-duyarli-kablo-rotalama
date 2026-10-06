@@ -1,0 +1,33 @@
+[project]
+name = "emc-harness-routing-demo"
+version = "1.0.0"
+description = "EMC-aware wire harness routing on a 3D fuselage mesh (demo)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+# NaN/inf steps must never pass silently.
+filterwarnings = ["error::RuntimeWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["docs", "outputs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+    "B905",                        # zip() without strict=: lengths are equal by construction
+    "RUF001", "RUF002", "RUF003",  # Turkish and Greek letters (ı, ş, λ, Σ) are intended
+]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["main.py", "harness_demo"]
+ignore_missing_imports = true  # scipy, trimesh, networkx, plotly, kaleido, choreographer ship without stubs
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = false  # numpy and the stub-less libraries return Any everywhere
+no_implicit_optional = true

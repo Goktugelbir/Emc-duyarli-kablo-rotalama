@@ -7,7 +7,8 @@
 **Kabloları demetlerken EMC ayrım mesafesini, ayrıt kapasitesini, minimum bükülme yarıçapını ve yasak
 hacimlere güvenlik payını birlikte gözeten bütünleşik rotalama, bu senaryoda demetlemenin yarattığı
 5660 EMC ihlal noktasını, 116 kapasite ihlalini ve 15 bükülme ihlalini sıfıra indirirken demetlenme
-oranını 0,382'de tutuyor.**
+oranını 0,382'de tutuyor.** Bütünleşik çözümün kablo listesinde ([`outputs/wirelist.csv`](outputs/wirelist.csv))
+11 kablonun her biri bağımsız denetimlerle tek tek doğrulanır: hepsi `OK`, en sıkışık EMC ayrım payı +3,9 cm.
 
 ![Demetleme ve bütünleşik rotalama karşılaştırması: aynı senaryo, aynı kamera](outputs/comparison.png)
 
@@ -34,8 +35,9 @@ Sayfa three.js ile fiziksel tabanlı malzeme, ortam ışığı ve gölgelerle ç
   ve güvenlik payıyla büyütülmüş sınırları (kesikli kırmızı çizgi),
 - **Rotalamayı oynat:** kablolar, yöntemin onları son kez rotaladığı sırayla (söküp yeniden rotalama dahil)
   tek tek döşenir; ihlal noktaları ve kelepçeler sonda belirir,
-- bir kablonun üzerine gelince adı, sınıfı ve güzergâh uzunluğu; tıklayınca diğer sınıflara gereken en büyük
-  ayrım mesafesi kadar yarı saydam bir zarf,
+- bir kablonun üzerine gelince adı, sınıfı, güzergâh uzunluğu ve **doğrulama payları** (EMC ayrım payı, en küçük
+  bükülme yarıçapı, yasak hacme uzaklık, `OK`/`CHECK`); tıklayınca bağlandığı ekipman ve diğer sınıflara gereken
+  en büyük ayrım mesafesi kadar yarı saydam bir zarf,
 - her yöntem için yedi denetim sonucu (EMC, bükülme, yasak hacim, güvenlik payı, kapasite ihlali ve uzunluklar),
 - hazır kamera açıları (içeriden, alttan, dışarıdan, üstten), katmanları açıp kapatma, dar ekranlarda
   görüş açısının otomatik ayarlanması.
@@ -87,8 +89,10 @@ Asıl projede problem kapasiteli Steiner ormanı olarak modellenip Lagrange gev�
 - Beş rotalama yöntemini çalıştırır; sonuçları rotalama kodundan bağımsız beş denetimle kontrol eder.
 - Sıralı yöntemlerin kablo sırasına ve uç noktalara ne kadar duyarlı olduğunu 40 denemelik bir
   **sağlamlık testiyle** ölçer.
-- Metrikleri tablo olarak yazar. Her yöntem için 3B PNG, karşılaştırma görseli, döner GIF, metrik
-  grafiği, Lagrange yakınsama grafiği, etkileşimli 3B sayfa ve çalışma günlüğü üretir.
+- Metrikleri tablo olarak yazar; kablo listesini (`wirelist.csv`, kablo başına doğrulama paylarıyla) ve bütün
+  güzergâhları 3B olarak (`routes.json`) dışa aktarır.
+- Her yöntem için 3B görsel, karşılaştırma görseli, rotalama animasyonu (GIF), metrik grafiği, Lagrange
+  yakınsama grafiği, etkileşimli 3B sayfa ve çalışma günlüğü üretir.
 
 **Demo ne yapmıyor**
 
@@ -137,8 +141,9 @@ python main.py
 
 Bu komut tüm çıktıları yeniden üretir: `outputs/` altındaki metrik ve sağlamlık tabloları, 3B görseller
 (`routes_*.png`, `comparison.png`, `viewer_inside.png`, `demo.gif`), 2B grafikler (`metrics_chart.png`,
-`lagrangian_convergence.png`), `run_log.txt` ve `docs/index.html`. Bizim makinemizde toplam süre ~65 s'dir:
-~37 s sağlamlık testi, ~22 s 3B görsellerin yakalanması, ~4 s 2B grafikler, ~2 s mesh, rotalama ve denetimler.
+`lagrangian_convergence.png`), `wirelist.csv`, `routes.json`, `run_log.txt` ve `docs/index.html`. Bizim
+makinemizde toplam süre ~40 s'dir: ~11 s sağlamlık testi, ~25 s 3B görsellerin yakalanması, ~2 s 2B grafikler,
+~2 s mesh, rotalama, denetimler ve dışa aktarım. `--no-images` ile görseller atlanır (~10–20 s).
 
 Görüntü üretimi sistemde kurulu bir Chrome/Chromium kullanır (yoksa `plotly_get_chrome` komutuyla
 indirilebilir). 3B görseller etkileşimli sayfadan yakalandığı ve sayfa three.js'i CDN'den yüklediği için
@@ -155,6 +160,7 @@ bu adım **internet bağlantısı** gerektirir; `docs/index.html`'i görüntüle
 | `--capacity K` | 2 | ayrıt kapasitesi |
 | `--clearance M` | 0.05 | yasak hacim güvenlik payı [m] |
 | `--order STR` | `input` | kablo önceliklendirme stratejisi (`input`, `critical-first`, `longest-first`, `shortest-first`) |
+| `--workers N` | Linux'ta 4, Windows/macOS'ta 1 | sağlamlık testi için paralel işlem sayısı; sonuç işçi sayısından bağımsızdır |
 
 Örneğin yalnızca metrikleri ve sayfayı birkaç saniyede üretmek için:
 
@@ -174,27 +180,42 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-[`tests/`](tests) altında 35 test vardır (~7 s):
+[`tests/`](tests) altında 45 test vardır (~12 s; biri isteğe bağlıdır, aşağıya bakınız):
 
 - **Denetimler** (`test_checks.py`): çember yarıçapı, yeniden örnekleme, EMC, bükülme, kapasite,
   yasak hacim ve güvenlik payı sayımları elle hesaplanabilen küçük örneklerde doğrulanır.
 - **Geometri ve çizge** (`test_geometry_graph.py`): büyütülmüş hacmin güvenlik payı komşuluğunu
-  kapsaması, rotalanabilir düğümlerin paya uyması, hiçbir ayrıtın hacme girmemesi, bağlılık, simetri.
+  kapsaması, rotalanabilir düğümlerin paya uyması, hiçbir ayrıtın hacme girmemesi, bağlılık, simetri;
+  vektörel ayrıt aramasının yönden bağımsız olması ve komşu olmayan düğümlerde hata vermesi; uçların doğru
+  ekipmana atanması.
 - **Rotalama** (`test_routing.py`): her yolun geçerli olması (doğru uçlar, gerçek ayrıtlar);
   baseline'ın networkx ile aynı uzunluğu bulması; dönüş çizgesinde U dönüşü ve keskin dönüş
   olmaması; e) yönteminin tüm denetimleri geçmesi; söküp yeniden rotalamanın rastgele sıralarda
   EMC ihlalini sıfırda tutması; Lagrange alt sınırının hiç azalmaması ve üst sınırı geçmemesi;
-  uygun çözüm yokken Lagrange'ın NaN üretmeden temiz hata vermesi.
+  uygun çözüm yokken Lagrange'ın NaN üretmeden temiz hata vermesi; sıralama stratejilerinin doğru sıralaması
+  ve geçersiz stratejide hata vermesi.
+- **Dışa aktarım** (`test_export.py`): kablo listesinin sütunları ve kablo numaraları; doğrulama paylarının
+  bağımsız denetimlerle tutarlı olması; `routes.json`'un kompakt, eksiksiz ve byte düzeyinde deterministik olması.
 - **Sağlamlık testi** (`test_benchmark.py`): uç nokta sapmasının farklı sınıftan uçları ayrım
-  mesafesinin altına düşürmemesi; özet tablonun yapısı.
+  mesafesinin altına düşürmemesi; özet tablonun yapısı; **paralel çalıştırmanın sıralı çalıştırmayla aynı
+  sonucu vermesi**; sağlamlık testindeki her yöntem tanımının çalışması.
+- **Görüntüleyici** (`test_viewer.py`): üretilen sayfanın tek başına çalışır olması (bütün parçalar gömülü);
+  `viewer.js`'in Node ile sözdizimi denetimi (Node yoksa atlanır); görüntüleyicinin okuduğu her `D.<alan>`'ın
+  Python'un gömdüğü veride bulunması; `capture.py`'nin çağırdığı her `window.viewer` fonksiyonunun var olması.
+  İsteğe bağlı bir test, sayfayı başsız Chrome'da açıp beş yöntemi gezer ve hiçbir JavaScript hatası olmadığını
+  doğrular (Chrome ve internet gerektirir: `HARNESS_BROWSER_TESTS=1 pytest`).
 - **Regresyon** (`test_regression.py`): yayımlanan metrik tablosunun (aşağıda) aynen üretilmesi.
 - **Uçtan uca** (`test_cli.py`): `main.py --no-images` tüm dosyaları yazar, PNG üretmez, günlükte
   yerel yol yoktur, JSON geçerlidir ve sayfaya gömülen veri tutarlıdır.
 
-`pytest.ini`, `RuntimeWarning` uyarılarını hataya çevirir; böylece NaN/sonsuz adımlar fark edilmeden geçemez.
-GitHub Actions iş akışı ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) her push ve pull
-request'te Python 3.11 ile testleri ve `python main.py --no-images --trials 3` duman testini çalıştırır,
-çıktıları da artefakt olarak saklar.
+Test, lint ve tip denetimi ayarları [`pyproject.toml`](pyproject.toml) içindedir. pytest `RuntimeWarning`
+uyarılarını hataya çevirir; böylece NaN/sonsuz adımlar fark edilmeden geçemez. Kod [ruff](https://docs.astral.sh/ruff/)
+ile denetlenir (`ruff check .`: pycodestyle, pyflakes, import sırası, bugbear, pyupgrade, simplify, ruff) ve
+[mypy](https://mypy-lang.org/) ile tip denetiminden geçer (`mypy`; bulgu yok). Denetimler, hacimlerin yalnızca
+şeklini bir `Protocol` ile tanımlar; böylece geometri modülünü içe aktarmadan da tip güvenli kalır.
+GitHub Actions iş akışı ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) her push ve pull request'te
+Python 3.11 ile lint'i, tip denetimini, testleri ve `python main.py --no-images --trials 3 --workers 2` duman
+testini (paralel yol dahil) çalıştırır, çıktıları da artefakt olarak saklar.
 
 ### Görüntülerle ilgili teknik notlar
 
@@ -211,6 +232,11 @@ request'te Python 3.11 ile testleri ve `python main.py --no-images --trials 3` d
   (EMC sınıf renkleri palette garanti edilir). Böylece dosya yalnızca değişen bölgeleri saklar ve küçük kalır
   (~200 KB).
 - Metrik grafiği ve Lagrange yakınsama grafiği plotly ile çizilir (`harness_demo/visualize.py`).
+- Görüntüleyicinin kaynağı [`harness_demo/viewer/`](harness_demo/viewer) altında üç dosyadır: HTML iskeleti
+  (`template.html`), stil (`viewer.css`) ve three.js kodu (`viewer.js`, bir ES modülü). `presentation.py` bunları
+  verilerle birlikte tek bir `docs/index.html` dosyasına birleştirir; böylece sayfa hem GitHub Pages'te hem de
+  dosyadan açıldığında çalışır. Sayfa, çalışma sırasındaki JavaScript hatalarını `window.__viewerErrors` içinde
+  toplar; tarayıcı testi bunun boş kaldığını doğrular.
 
 ## Proje yapısı
 
@@ -218,22 +244,29 @@ request'te Python 3.11 ile testleri ve `python main.py --no-images --trials 3` d
 harness_demo/
   geometry.py    # parametrik yarım silindir mesh'i + yasak hacimler (kutu, küre), güvenlik payıyla büyütme
   graph.py       # mesh -> rotalama çizgesi (networkx), yasak düğüm/ayrıt temizliği, CSR çıktısı
-  scenarios.py   # 11 kablolu sentetik senaryo, EMC ayrım tablosu, uç nokta sapması
-  routing.py     # 5 yöntem: baseline, demetleme, EMC duyarlı, Lagrange, bütünleşik; dönüş çizgesi
-  checks.py      # bağımsız denetimler (rotalama kodunu kullanmaz)
+  scenarios.py   # 11 kablolu sentetik senaryo, EMC ayrım tablosu, ekipman konumları, uç nokta sapması
+  routing/       # 5 rotalama yöntemi (dışarıya tek API: from harness_demo.routing import ...)
+    core.py        # sonuç tipi, Dijkstra, güzergâh örnekleme, a) baseline
+    turn_graph.py  # bükülmeyi bilen dönüş çizgesi
+    sequential.py  # b) demetleme, c) EMC duyarlı, e) bütünleşik; söküp yeniden rotalama
+    lagrangian.py  # d) Lagrange gevşetmesi
+  checks.py      # bağımsız denetimler (rotalama kodunu kullanmaz) ve denetim ayarları
   metrics.py     # metrikler ve tablo biçimlendirme
-  benchmark.py   # sağlamlık testi: rastgele kablo sırası ve uç nokta sapması
+  benchmark.py   # sağlamlık testi: rastgele kablo sırası ve uç nokta sapması (isteğe bağlı paralel)
   visualize.py   # 2B grafikler (plotly): metrik grafiği, Lagrange yakınsaması
-  presentation.py# etkileşimli sayfa: sonuçları JSON olarak görüntüleyici şablonuna gömer
-  viewer_template.html # three.js tabanlı etkileşimli 3B görüntüleyici şablonu (yakalama modu dahil)
+  presentation.py# etkileşimli sayfa: görüntüleyiciyi ve sonuçları tek bir HTML dosyasına birleştirir
+  viewer/        # three.js görüntüleyicinin kaynağı: template.html, viewer.css, viewer.js (yakalama modu dahil)
   capture.py     # README 3B görsellerini sayfadan başsız Chrome ile yakalar (PNG + GIF)
-  export.py      # kablo listesi (CSV wirelist) ve 3B güzergâh (JSON routes) dışa aktarımı
-main.py          # uçtan uca çalıştırma, komut satırı seçenekleri
-tests/           # pytest testleri (35 test)
-outputs/         # 3B görseller (PNG, GIF), wirelist.csv, routes.json, metrics.md, robustness.md, lagrangian_history.json, run_log.txt
+  export.py      # kablo listesi (wirelist.csv, doğrulama paylarıyla) ve 3B güzergâhlar (routes.json)
+main.py          # uçtan uca çalıştırma: build_model -> route_all -> report_metrics -> write_exports
+                 #   -> run_benchmark -> write_presentation; komut satırı seçenekleri
+tests/           # pytest testleri (45 test; biri isteğe bağlı tarayıcı testi)
+outputs/         # 3B görseller (PNG, GIF), 2B grafikler, wirelist.csv, routes.json, metrics.md, robustness.md,
+                 # lagrangian_history.json, run_log.txt
 docs/index.html  # GitHub Pages için tek sayfalık etkileşimli 3B görünüm
-.github/workflows/ci.yml   # testler + duman testi
-requirements.txt / requirements-dev.txt   # sabitlenmiş sürümler
+.github/workflows/ci.yml   # lint + tip denetimi + testler + duman testi
+pyproject.toml   # pytest, ruff ve mypy ayarları
+requirements.txt / requirements-dev.txt   # sabitlenmiş sürümler (geliştirme: pytest, ruff, mypy)
 ```
 
 ## Yöntemler
@@ -327,9 +360,9 @@ koordinatlarını alıp her şeyi geometriden yeniden hesaplar:
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | a) Baseline (bağımsız Dijkstra) | 61.66 | 51.65 | 0.162 | 980 | 0 | 0 | 0 | 20 | 0.00 |
 | b) Demetleme | 71.84 | 17.80 | 0.752 | 5660 | 15 | 0 | 0 | 116 | 0.01 |
-| c) EMC duyarlı demetleme | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.12 |
-| d) Lagrange gevşetmesi (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.91 |
-| e) Bütünleşik (EMC + kapasite + bükülme) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.09 |
+| c) EMC duyarlı demetleme | 66.18 | 35.22 | 0.468 | 0 | 8 | 0 | 0 | 35 | 0.03 |
+| d) Lagrange gevşetmesi (K=2) | 61.76 | 53.80 | 0.129 | 887 | 0 | 0 | 0 | 0 | 0.74 |
+| e) Bütünleşik (EMC + kapasite + bükülme) | 66.05 | 40.80 | 0.382 | 0 | 0 | 0 | 0 | 0 | 0.06 |
 
 ![Demetlenme oranı, EMC ihlali ve kapasite ihlali, yöntem başına](outputs/metrics_chart.png)
 
@@ -388,6 +421,102 @@ bunu doğrular). Tüm denemeler bağımsız denetimlerle ölçülür (`outputs/r
   noktası kalır: dar kapasite, bükülme kısıtı ve EMC ayrımı birlikte bazı sıralarda çakışır.
   Ceza yumuşak olduğundan sıfır ihlal garanti değildir.
 
+### Kablo önceliklendirme stratejileri (`--order`)
+
+Sıralı yöntemlerin (b, c, e) ilk geçişi hangi sırayla yapacağı `--order` ile seçilebilir: `input` (senaryo
+sırası, varsayılan), `critical-first` (önce power, sonra data, sonra signal; sınıf içinde uzun kablo önce),
+`longest-first` ve `shortest-first` (uç noktalar arasındaki düz mesafeye göre). Bu senaryoda bağımsız
+denetimlerle ölçülen sonuç:
+
+| Strateji | c) EMC / kapasite / bükülme | c) toplam uzunluk | e) EMC / kapasite / bükülme | e) toplam uzunluk |
+|:---|:---:|---:|:---:|---:|
+| `input` | 0 / 35 / 8 | 66,18 m | 0 / 0 / 0 | 66,05 m |
+| `critical-first` | 0 / 93 / 9 | 72,07 m | 0 / 0 / 0 | 72,00 m |
+| `longest-first` | 0 / 93 / 9 | 72,07 m | 0 / 0 / 0 | 72,00 m |
+| `shortest-first` | 0 / 110 / 9 | 79,46 m | 0 / 0 / 0 | 76,73 m |
+
+Bütünleşik yöntem her stratejide tüm denetimlerden temiz geçer; ancak bu senaryoda hiçbir strateji varsayılan
+sıradan iyi değildir: kablolar 6–11 m uzar ve (c)'nin kapasite ihlali artar. (`critical-first` ve
+`longest-first` farklı sıralar üretse de söküp yeniden rotalamadan sonra c) ve e) için aynı çözüme varır.)
+Sıra bağımlılığını asıl azaltan, yukarıdaki sağlamlık testinin gösterdiği gibi söküp yeniden rotalamadır;
+stratejiler deneme için bir seçenektir.
+
+## Dışa aktarım: kablo listesi ve güzergâh dosyası
+
+`python main.py` iki makine-okunur dosya da yazar ([`harness_demo/export.py`](harness_demo/export.py)).
+
+**[`outputs/wirelist.csv`](outputs/wirelist.csv): kablo listesi.** Bütünleşik yöntemin (e) her kablosu için bir
+satır. Bir üretim kablo listesi gibi uçları ve uzunluğu verir; ayrıca her kablonun kendi doğrulama paylarını
+bağımsız denetimlerin yapı taşlarıyla geometriden yeniden hesaplar:
+
+| Sütun | Anlamı |
+|:---|:---|
+| `wire_id`, `cable_name`, `emc_class` | kablo numarası (W01…), adı, EMC sınıfı |
+| `from_location`, `to_location` | bağlandığı ekipman, ör. `Arka raf (sağ)` → `Ön panel (sol)` |
+| `from_node`, `from_x_m` … `to_z_m` | uç düğümler ve koordinatları [m] |
+| `length_m`, `waypoint_count` | güzergâh uzunluğu ve nokta sayısı |
+| `bundled_with`, `shared_length_m`, `sharing_ratio` | yol paylaştığı kablolar, ortak uzunluk ve oranı |
+| `min_emc_margin_m` | farklı sınıftan en yakın kabloya uzaklık − gereken ayrım; < 0 ise EMC ihlali |
+| `min_bend_radius_m` | güzergâhtaki en küçük üç nokta çember yarıçapı; < 0,10 m ise bükülme ihlali |
+| `min_keepout_distance_m` | yasak hacimlere en küçük uzaklık; < 0,05 m ise güvenlik payı ihlali |
+| `status` | tüm paylar sağlanıyorsa `OK`, değilse `CHECK` |
+
+Bu senaryoda 11 kablonun 11'i `OK`'dir. Örnek satırlar:
+
+| Kablo | Nereden → nereye | Uzunluk | Demet | EMC payı | En küçük R | Yasak hacme | Durum |
+|:---|:---|---:|:---|---:|---:|---:|:---:|
+| W01 P1 (power) | Arka raf (sağ) → Ön panel (sağ) | 5,82 m | P2 | +13,1 cm | 0,122 m | 9,3 cm | OK |
+| W05 D1 (data) | Arka raf (sağ) → Ön panel (sağ) | 5,53 m | D2, D3 | +3,9 cm | 0,142 m | 7,7 cm | OK |
+| W10 D3 (data) | Arka raf (sağ) → Ön panel (sol) | 6,33 m | D1 | +8,7 cm | 0,112 m | 8,1 cm | OK |
+| W11 S4 (signal) | Arka raf (sol) → Ön panel (sağ) | 7,86 m | S2, S3 | +3,9 cm | 0,119 m | 8,9 cm | OK |
+
+En sıkışık EMC payı +3,9 cm'dir (D1 ile S4 arasında). Paylar bir testle bağımsız denetimlere bağlanmıştır:
+bütünleşik çözümde hepsi `OK`'dir, demetleme çözümünde ise EMC payı negatif olan kablolar tam olarak `CHECK`
+işaretlenir. Aynı paylar 3B sayfadaki bilgi kutusunda da gösterilir.
+
+**[`outputs/routes.json`](outputs/routes.json): bütün güzergâhlar.** Beş yöntemin bütün kabloları; CAD/ECAD'e
+veya başka analizlere aktarmak için. Her kablo için `waypoints_xyz` (gövde yüzeyindeki mesh köşelerinden geçen
+3B kırık çizgi, metre), `node_ids`, uçların ekipmanı, uzunluk ve demet bilgisi; her yöntem için rotalama sırası
+ve denetim sonuçları; ayrıca çalıştırma parametreleri (kapasite, bükülme yarıçapı, güvenlik payı, ayrım tablosu,
+sıralama stratejisi), birim ve koordinat sistemi. Noktalar denetimlerin değerlendirdiği ham güzergâhtır;
+3B sayfadaki kaldırılmış ve yumuşatılmış görünüm yalnızca görseldir ve dosyada yoktur.
+
+Dosya kompakt ve deterministiktir: her dizi tek satırdadır (~700 satır, ~110 KB; önceki sürüm ~20 000 satır,
+~395 KB'tı) ve içinde süre gibi çalıştırmaya bağlı bir değer yoktur. Aynı girdiyle her çalıştırma byte düzeyinde
+aynı dosyayı üretir (bir test bunu doğrular), bu yüzden git'te yalnızca gerçek değişiklikler görünür.
+
+## Performans
+
+Hesap çekirdeği profil çıkarılarak hızlandırılmıştır. Sonuçlar **bit düzeyinde aynıdır**: regresyon testlerine
+ek olarak örnekleme fonksiyonları ve beş yöntemin bütün güzergâhları eski sürümle karşılaştırılarak doğrulandı.
+
+- Güzergâh örnekleme (`routing.densify`, `checks.resample_polyline`) ve bükülme denetimi Python döngüleri
+  yerine vektör işlemleriyle yapılır; numpy'nin `linspace` aritmetiği birebir korunur. (İki örnekleme
+  fonksiyonu bilerek ayrıdır: denetimler, doğruladıkları rotalama koduna bağımlı olmamalıdır.)
+- Sıralı rotalamada her kablo ve her yeniden rotalama turu için tekrar hesaplanan güzergâh geometrisi
+  (benzersiz ayrıtlar, örnek noktalar, KD-ağaçları, yakın düğümler) güzergâhın kendisine göre önbelleğe alınır.
+- Ayrıt araması, sözlük yerine sıralı anahtarlar üzerinde `searchsorted` ile vektörel yapılır.
+- 2B grafikler için başsız tarayıcı yalnızca grafik çizilirken açılır; raporlanan rotalama sürelerini etkilemez.
+
+| | Önce | Sonra |
+|:---|---:|---:|
+| Sağlamlık testi (40 deneme × 3 yöntem) | 28–41 s | 9–18 s |
+| `python main.py --no-images` | 30–45 s | 10–21 s |
+| `python main.py` (tüm çıktılar, görseller dahil) | ~65 s | ~40 s |
+
+Ölçümler aynı dizüstü bilgisayarda ardışık çalıştırmalardır; mutlak süreler makinenin yüküne göre değişir, ama
+hızlanma her karşılaştırmada 2–3 kattır.
+
+**Paralel sağlamlık testi.** Denemeler birbirinden bağımsız olduğu için `--workers N` ile ayrı işlemlerde
+çalışabilir. Denemeler ana işlemde çekildiği için sonuç işçi sayısından bağımsızdır (bir test bunu doğrular).
+Ancak kazanç platforma bağlıdır. Windows'ta (ve macOS'ta) işlemler `spawn` ile başlar ve her işçi numpy, scipy,
+networkx ve trimesh'i baştan yükler (~1,5–2 s/işçi). Bu, ~10 s'lik bir testte kazancın çoğunu yer: bu makinede
+sıralı 10,2 s, 4 işçiyle 8,8 s ölçüldü. İş parçacıkları da GIL yüzünden yalnızca ~1,3 kat hızlandırdığı için
+kullanılmadı. Bu yüzden varsayılan değer Windows/macOS'ta 1, işlemlerin ucuzca `fork` edildiği Linux'ta 4'tür.
+Linux'taki hızlanma bu makinede ölçülemedi; CI paralel yolu Linux'ta doğruluk için çalıştırır.
+
+Kalan sürenin çoğu scipy'nin Dijkstra algoritmasında (çağrı başına ~0,5 ms) ve görsellerin yakalanmasındadır.
+
 ## Tüm yöntemler
 
 | a) Baseline | b) Demetleme |
@@ -421,10 +550,12 @@ da görseldir.
   gereksinimini değiştiren ve maliyeti/ağırlığı olan bir karar değişkeni olarak modele girer.
 - **Kelepçe aralığı:** Güzergâh boyunca destek noktalarının izin verilen aralıkta
   yerleştirilebilmesi; uygun yapısal bağlantı noktalarına yakınlık.
-- **Kablo sırası:** Sağlamlık testi, sıralı yöntemlerin sıraya duyarlılığını ölçer. Asıl projede
-  sıralama sezgiselleri ya da tamamen eşzamanlı (Lagrange tabanlı) yöntemler bu bağımlılığı azaltabilir.
+- **Kablo sırası:** Sağlamlık testi, sıralı yöntemlerin sıraya duyarlılığını ölçer; `--order` ile denenen basit
+  sıralama sezgiselleri bu senaryoda varsayılan sıradan iyi sonuç vermemiştir. Asıl projede tamamen eşzamanlı
+  (Lagrange tabanlı) yöntemler bu bağımlılığı azaltabilir.
 - **Gerçek geometri ve CAD'e aktarım:** Gerçek mesh/CAD verisinin içe alınması, sonuç
-  güzergâhların CAD ortamına (ör. STEP/çizgi geometrisi) geri aktarılması.
+  güzergâhların CAD ortamına (ör. STEP/çizgi geometrisi) geri aktarılması. `routes.json` bunun ilk adımıdır:
+  güzergâhları birimi ve koordinat sistemi belirtilmiş 3B kırık çizgiler olarak verir.
 
 ## English summary
 
@@ -436,7 +567,8 @@ independent Dijkstra, sequential bundling, EMC-aware bundling with rip-up-and-re
 Lagrangian relaxation of edge capacity, and an integrated method on a turn-aware graph that satisfies
 EMC separation, capacity, bend radius, keep-out and clearance at the same time (bundling ratio 0.382).
 Independent checks recompute every violation, a 40-trial robustness benchmark measures order and
-terminal sensitivity, and 35 pytest tests run in CI with pinned dependencies.
+terminal sensitivity, a wirelist with per-cable verification margins and all routes as 3D polylines are exported,
+and 45 pytest tests plus ruff lint and mypy type checks run in CI with pinned dependencies.
 
 ---
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from itertools import pairwise
 
 import networkx as nx
 import numpy as np
@@ -96,7 +97,7 @@ def test_reroute_removes_order_dependence(graph, cables, volumes):
 def test_lagrangian_bounds(results):
     hist = results["lagrangian"].history
     lbs = [h["lower_bound"] for h in hist]
-    assert all(b2 >= b1 for b1, b2 in zip(lbs, lbs[1:]))  # best lower bound never decreases
+    assert all(b2 >= b1 for b1, b2 in pairwise(lbs))  # best lower bound never decreases
     for h in hist:
         assert math.isfinite(h["dual"])
         assert h["lower_bound"] <= h["upper_bound"] + 1e-9
@@ -116,11 +117,11 @@ def test_order_cables_strategies(cables, graph):
     longest = order_cables(cables, "longest-first", graph.positions)
     pos = graph.positions
     dists_long = [np.linalg.norm(pos[c.start] - pos[c.end]) for c in longest]
-    assert all(d1 >= d2 - 1e-9 for d1, d2 in zip(dists_long[:-1], dists_long[1:]))
+    assert all(d1 >= d2 - 1e-9 for d1, d2 in pairwise(dists_long))
 
     shortest = order_cables(cables, "shortest-first", graph.positions)
     dists_short = [np.linalg.norm(pos[c.start] - pos[c.end]) for c in shortest]
-    assert all(d1 <= d2 + 1e-9 for d1, d2 in zip(dists_short[:-1], dists_short[1:]))
+    assert all(d1 <= d2 + 1e-9 for d1, d2 in pairwise(dists_short))
 
     critical = order_cables(cables, "critical-first", graph.positions)
     classes = [c.emc_class for c in critical]
@@ -131,6 +132,8 @@ def test_order_cables_strategies(cables, graph):
 
     with pytest.raises(ValueError):
         order_cables(cables, "invalid-strategy")
+    with pytest.raises(ValueError):  # distance-based strategies need the node positions
+        order_cables(cables, "longest-first")
 
 
 def test_routing_with_smart_ordering(graph, cables, turns):

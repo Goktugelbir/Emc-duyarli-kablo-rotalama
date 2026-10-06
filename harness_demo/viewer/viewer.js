@@ -1,151 +1,7 @@
-<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kablo Demeti 3B</title>
-<meta name="description" content="Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle EMC duyarlı rotalanması — etkileşimli 3B görünüm.">
-<script type="importmap">
-{ "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@__THREE_VERSION__/examples/jsm/"
-} }
-</script>
-<style>
-  :root {
-    color-scheme: light dark;
-    --surface: #fcfcfb; --surface-2: #f1f0ec; --border: #dcdbd5;
-    --text: #0b0b0b; --text-2: #52514e; --accent: #2a78d6; --accent-text: #ffffff;
-    --good: #1a7f4b; --bad: #b5001f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --surface: #121416; --surface-2: #1c1f23; --border: #2e3237;
-      --text: #ececea; --text-2: #a4a7ab; --accent: #4b8fe0; --accent-text: #ffffff;
-      --good: #4cc38a; --bad: #ff6b6b;
-    }
-  }
-  :root[data-theme="dark"] {
-    --surface: #121416; --surface-2: #1c1f23; --border: #2e3237;
-    --text: #ececea; --text-2: #a4a7ab; --accent: #4b8fe0; --accent-text: #ffffff;
-    --good: #4cc38a; --bad: #ff6b6b;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--surface); color: var(--text); }
-  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 40px; }
-  h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 4px; text-wrap: balance; }
-  p.lead { margin: 0 0 18px; color: var(--text-2); max-width: 75ch; }
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  button { font: inherit; color: inherit; }
-  .tabs button { padding: 8px 14px; border-radius: 8px; cursor: pointer;
-                 border: 1px solid var(--border); background: var(--surface); }
-  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-  button:focus-visible, label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .stat { background: var(--surface-2); border-radius: 8px; padding: 9px 12px; min-width: 0; }
-  .stat .k { font-size: .78rem; color: var(--text-2); }
-  .stat .v { font-size: 1.2rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .stat .v.ok { color: var(--good); } .stat .v.ng { color: var(--bad); }
+// Interactive 3D viewer of the routing results (three.js). Assembled into docs/index.html by
+// harness_demo/presentation.py; the data (`#data` JSON) is embedded by the same step.
+// Everything added for realism here (structure, clamps, smoothing, lighting) is visual only.
 
-  .viewer { position: relative; height: min(74vh, 760px); min-height: 420px; border-radius: 10px; overflow: hidden;
-            border: 1px solid var(--border);
-            background: radial-gradient(ellipse at 50% 35%, #353c45 0%, #1b1f24 55%, #0e1013 100%); }
-  .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-  .labels { position: absolute; inset: 0; pointer-events: none; }
-  .lbl { font: 600 11px/1.2 system-ui, sans-serif; color: #f4f4f2; background: rgba(14,16,19,.72);
-         padding: 2px 6px; border-radius: 4px; white-space: nowrap; border-left: 3px solid var(--c, #9a9890); }
-  .lbl.ko { --c: #e34948; } .lbl.eq { --c: #c9ced4; font-weight: 500; }
-  .hud { position: absolute; color: #ececea; font-size: 12.5px; pointer-events: none; }
-  .hud > * { pointer-events: auto; }
-  .legend { left: 12px; bottom: 12px; background: rgba(14,16,19,.7); border-radius: 8px; padding: 8px 10px;
-            display: grid; gap: 3px; }
-  .legend span.sw { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-right: 6px;
-                    vertical-align: middle; }
-  .legend span.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 9px 0 5px;
-                     vertical-align: middle; }
-  .playbar { right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
-  .playbar button { background: #f4f4f2; color: #0b0b0b; border: 0; border-radius: 8px; padding: 8px 14px;
-                    cursor: pointer; font-weight: 600; }
-  .status { left: 12px; top: 12px; background: rgba(14,16,19,.7); border-radius: 8px; padding: 6px 10px;
-            font-variant-numeric: tabular-nums; }
-  .status:empty { display: none; }
-  .tip { position: absolute; pointer-events: none; background: rgba(14,16,19,.88); color: #f4f4f2;
-         font-size: 12.5px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; transform: translate(12px, 12px);
-         display: none; z-index: 3; }
-  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: #d8d8d4; font-size: 14px;
-             text-align: center; padding: 16px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between;
-              margin-top: 10px; }
-  .chips, .views { display: flex; flex-wrap: wrap; gap: 6px; }
-  label.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
-               border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; font-size: .85rem;
-               user-select: none; }
-  label.chip input { margin: 0; accent-color: var(--accent); }
-  .views button { padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
-                  cursor: pointer; font-size: .85rem; }
-  .views .lbl-t { font-size: .8rem; color: var(--text-2); align-self: center; margin-right: 2px; }
-  .selinfo { margin-top: 10px; font-size: .9rem; color: var(--text-2); min-height: 1.5em; }
-  footer { margin-top: 14px; font-size: .84rem; color: var(--text-2); max-width: 95ch; }
-  code { font-size: .92em; }
-  .caption { left: 16px; top: 14px; background: rgba(14,16,19,.8); border-radius: 10px; padding: 10px 14px;
-             font-size: 17px; line-height: 1.45; display: none; }
-  .caption b { font-size: 19px; }
-  .caption .ok { color: #5fd39a; font-weight: 700; } .caption .ng { color: #ff7a7a; font-weight: 700; }
-  /* Capture mode (?capture): only the 3D view, used to render the README images. */
-  body.capture main { max-width: none; padding: 0; }
-  body.capture h1, body.capture p.lead, body.capture .tabs, body.capture .stats, body.capture .controls,
-  body.capture .selinfo, body.capture footer, body.capture .playbar { display: none; }
-  body.capture .viewer { position: fixed; inset: 0; height: 100vh; min-height: 0; border: 0; border-radius: 0; }
-  body.capture .caption { display: block; }
-  body.capture .status { left: auto; right: 16px; top: 14px; font-size: 16px; padding: 8px 12px; }
-  body.capture .legend { font-size: 14px; }
-  @media (max-width: 640px) {
-    .viewer { height: 62vh; min-height: 360px; }
-    .legend { font-size: 11px; padding: 6px 8px; }
-    .playbar { right: 8px; bottom: 8px; } .legend { left: 8px; bottom: 8px; }
-  }
-</style>
-</head>
-<body>
-<main>
-  <h1>Kablo demeti rotalama — etkileşimli 3B görünüm</h1>
-  <p class="lead">Yarım silindir gövde kesiti üzerinde 11 kablonun beş yöntemle rotalanması. Sürükleyerek döndürün,
-     tekerlekle yakınlaşın, bir kablonun üzerine gelince bilgisini görün, tıklayınca EMC ayrım zarfını açın.</p>
-  <div class="tabs" role="tablist" id="tabs" aria-label="Rotalama yöntemi"></div>
-  <div class="stats" id="stats" aria-live="polite"></div>
-  <div class="viewer" id="viewer">
-    <div class="loading" id="loading">3B görünüm yükleniyor…</div>
-    <div class="hud caption" id="caption"></div>
-    <div class="hud status" id="status" aria-live="polite"></div>
-    <div class="hud legend" id="legend"></div>
-    <div class="hud playbar"><button type="button" id="play">▶ Rotalamayı oynat</button></div>
-    <div class="tip" id="tip"></div>
-  </div>
-  <div class="controls">
-    <div class="chips" id="chips"></div>
-    <div class="views" id="views"><span class="lbl-t">Görünüm:</span></div>
-  </div>
-  <div class="selinfo" id="selinfo"></div>
-  <footer>
-    Tüm değerler temsilîdir ve <code>python main.py</code> çıktısından üretilmiştir; gerçek uçak verisi kullanılmamıştır.
-    Kablo güzergâhları, ihlal noktaları ve metrikler doğrudan rotalama ve bağımsız denetim sonuçlarıdır.
-    Kesikli kırmızı çizgiler yasak hacimlerin güvenlik payıyla büyütülmüş sınırıdır.
-    Gerçekçilik için eklenen öğeler — frame/stringer yapısı, zemin, kelepçeler, konnektörler, ekipman rafları,
-    kabloların yüzeyden ~10 cm kaldırılıp demet içinde yan yana dizilmesi ve köşelerinin yumuşatılması — yalnızca
-    görseldir; denetimlere ve metriklere girmez. Kablo kalınlıkları temsilîdir.
-  </footer>
-</main>
-
-<script id="data" type="application/json">__DATA_JSON__</script>
-<script>
-  // Shown when the three.js module cannot be loaded (offline or blocked CDN).
-  setTimeout(() => {
-    if (!window.__viewerReady) document.getElementById("loading").textContent =
-      "3B kütüphanesi (three.js) yüklenemedi. Bu sayfa internet bağlantısı gerektirir.";
-  }, 12000);
-</script>
-<script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -473,15 +329,12 @@ function buildActuator(c, envR) {
 // ---------------------------------------------------------------- equipment racks at the cable terminals
 const equipment = new THREE.Group();
 {
-  const groups = {};
-  for (const c of D.cables) for (const [node, end] of [[c.start, "s"], [c.end, "e"]]) {
-    const p = vtx(node);
-    const key = (p.x < LEN / 2 ? "A" : "F") + (p.y >= 0 ? "R" : "L");
-    (groups[key] ||= []).push(p);
+  const groups = {};   // equipment name (from the scenario) -> terminal positions
+  for (const c of D.cables) for (const [node, name] of [[c.start, c.from], [c.end, c.to]]) {
+    (groups[name] ||= []).push(vtx(node));
   }
-  const names = { AR: "Arka raf (sağ)", AL: "Arka raf (sol)", FR: "Ön panel (sağ)", FL: "Ön panel (sol)" };
-  for (const [key, pts] of Object.entries(groups)) {
-    const ths = pts.map(thetaOf), aft = key[0] === "A";
+  for (const [name, pts] of Object.entries(groups)) {
+    const ths = pts.map(thetaOf), aft = pts[0].x < LEN / 2;
     const t0 = Math.min(...ths) - 0.07, t1 = Math.max(...ths) + 0.07;
     const xs = pts.map(p => p.x), depth = 0.18;
     const x0 = aft ? Math.max(0.02, Math.min(...xs) - 0.05 - depth) : Math.min(LEN - 0.02 - depth, Math.max(...xs) + 0.05);
@@ -490,7 +343,7 @@ const equipment = new THREE.Group();
     const face = new THREE.Mesh(arcSection(R - 0.21, R - 0.014, t0 + 0.012, t1 - 0.012, 0.004, aft ? x0 + depth : x0 - 0.004), M.boxFace);
     equipment.add(face);
     const tm = (t0 + t1) / 2, rm = R - 0.11;
-    addLabel(names[key], new THREE.Vector3(x0 + depth / 2, rm * Math.cos(tm), rm * Math.sin(tm)).add(new THREE.Vector3(0, 0, 0)), "eq");
+    addLabel(name, new THREE.Vector3(x0 + depth / 2, rm * Math.cos(tm), rm * Math.sin(tm)).add(new THREE.Vector3(0, 0, 0)), "eq");
   }
 }
 scene.add(equipment);
@@ -564,7 +417,7 @@ function buildMethod(m) {
       ends.add(sl);
     }
     group.add(ends);
-    cables.push({ c, mesh, geo, segs, radial, curve, ends, length: m.lengths[c.name] });
+    cables.push({ c, mesh, geo, segs, radial, curve, ends, length: m.lengths[c.name], margin: (m.margins || {})[c.name] });
     centres.push(ctr);
   });
   buildClamps(centres, clampsG);
@@ -800,7 +653,21 @@ function updateHover() {
   if (!cb) { tip.style.display = "none"; return; }
   tip.style.display = "block";
   tip.style.left = pointerPx[0] + "px"; tip.style.top = pointerPx[1] + "px";
-  tip.textContent = `${cb.c.name} · ${cb.c.cls} (${CLASS_TR[cb.c.cls] || cb.c.cls}) · ${cb.length.toFixed(2)} m`;
+  tip.innerHTML = `<b>${cb.c.name}</b> · ${cb.c.cls} (${CLASS_TR[cb.c.cls] || cb.c.cls}) · ${cb.length.toFixed(2)} m` +
+    (cb.margin ? `<br>${marginHtml(cb.margin)}` : "");
+}
+// Per-cable verification margins (independent checks): EMC separation, bend radius, keep-out distance.
+function marginHtml(mg) {
+  const cls = ok => (ok ? "ok" : "ng");
+  const cm = v => (v === null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)} cm`);
+  const parts = [
+    `EMC payı <span class="${cls(mg.emc === null || mg.emc >= 0)}">${cm(mg.emc)}</span>`,
+    `min. bükülme R <span class="${cls(mg.bend === null || mg.bend >= D.minBendRadius)}">` +
+      `${mg.bend === null ? "—" : mg.bend.toFixed(3) + " m"}</span>`,
+    `yasak hacme <span class="${cls(mg.keepout === null || mg.keepout >= D.clearance)}">` +
+      `${mg.keepout === null ? "—" : (mg.keepout * 100).toFixed(1) + " cm"}</span>`,
+  ];
+  return parts.join(" · ") + ` · <span class="${cls(mg.status === "OK")}">${mg.status}</span>`;
 }
 function setHover(cb) {
   if (hovered === cb) return;
@@ -821,7 +688,8 @@ function selectCable(cb) {
     scene.add(envelope);
   }
   const seps = others.map(k => `${k}: ${sep(cb.c.cls, k).toFixed(2)} m`).join(", ");
-  selinfo.textContent = `Seçili: ${cb.c.name} (${cb.c.cls}) — güzergâh uzunluğu ${cb.length.toFixed(2)} m. ` +
+  selinfo.innerHTML = `<b>Seçili: ${cb.c.name}</b> (${cb.c.cls}, ${cb.c.from} → ${cb.c.to}) — güzergâh uzunluğu ` +
+    `${cb.length.toFixed(2)} m. ` + (cb.margin ? `Doğrulama payları: ${marginHtml(cb.margin)}. ` : "") +
     `Gösterilen zarf, diğer sınıflara gereken en büyük ayrım mesafesidir (${seps}).`;
 }
 function clearSelection() {
@@ -916,6 +784,3 @@ if (CAPTURE) window.viewer.select(D.initial);
 document.getElementById("loading").remove();
 window.__viewerReady = true;
 requestAnimationFrame(loop);
-</script>
-</body>
-</html>

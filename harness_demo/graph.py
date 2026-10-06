@@ -28,13 +28,16 @@ class RoutingGraph:
     lengths: np.ndarray  # (E,) Euclidean edge lengths [m]
     nx_graph: nx.Graph
     node_allowed: np.ndarray  # (N,) True if the vertex is routable
-    _edge_lookup: dict[tuple[int, int], int] = field(default_factory=dict, repr=False)
-    _tree: cKDTree | None = field(default=None, repr=False)
-    _allowed_ids: np.ndarray | None = field(default=None, repr=False)
+    _edge_keys: np.ndarray = field(init=False, repr=False)  # sorted u * N + v
+    _edge_order: np.ndarray = field(init=False, repr=False)  # edge index of each sorted key
+    _tree: cKDTree = field(init=False, repr=False)
+    _allowed_ids: np.ndarray = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Build the edge lookup table and the KD-tree of routable nodes."""
-        self._edge_lookup = {(int(u), int(v)): k for k, (u, v) in enumerate(self.edges)}
+        """Build the vectorised edge lookup and the KD-tree of routable nodes."""
+        keys = self.edges[:, 0].astype(np.int64) * self.n_nodes + self.edges[:, 1]
+        self._edge_order = np.argsort(keys, kind="stable")
+        self._edge_keys = keys[self._edge_order]
         self._allowed_ids = np.flatnonzero(self.node_allowed)
         self._tree = cKDTree(self.positions[self._allowed_ids])
 
@@ -48,13 +51,24 @@ class RoutingGraph:
         """Number of routable edges."""
         return len(self.edges)
 
+    def edge_ids(self, u: np.ndarray, v: np.ndarray) -> np.ndarray:
+        """Indices of the undirected edges (u[i], v[i]); KeyError if one of them is not an edge."""
+        u, v = np.asarray(u, dtype=np.int64), np.asarray(v, dtype=np.int64)
+        q = np.minimum(u, v) * self.n_nodes + np.maximum(u, v)
+        pos = np.minimum(np.searchsorted(self._edge_keys, q), len(self._edge_keys) - 1)
+        if len(q) and not np.array_equal(self._edge_keys[pos], q):
+            bad = int(np.flatnonzero(self._edge_keys[pos] != q)[0])
+            raise KeyError(f"({int(u[bad])}, {int(v[bad])}) is not an edge of the routing graph")
+        return self._edge_order[pos]
+
     def edge_id(self, u: int, v: int) -> int:
         """Index of the undirected edge (u, v)."""
-        return self._edge_lookup[(u, v) if u < v else (v, u)]
+        return int(self.edge_ids(np.array([u]), np.array([v]))[0])
 
     def path_edge_ids(self, path: list[int]) -> np.ndarray:
         """Edge indices traversed by a node path."""
-        return np.array([self.edge_id(a, b) for a, b in zip(path[:-1], path[1:])], dtype=int)
+        p = np.asarray(path, dtype=np.int64)
+        return self.edge_ids(p[:-1], p[1:]).astype(int)
 
     def path_length(self, path: list[int]) -> float:
         """Geometric length of a node path [m]."""

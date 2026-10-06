@@ -16,6 +16,7 @@ import base64
 import io
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -30,10 +31,10 @@ BACKGROUND = (18, 21, 25)
 class _Page:
     """Thin async wrapper around one headless Chrome tab showing the viewer."""
 
-    def __init__(self, tab) -> None:  # noqa: ANN001 (choreographer.Tab)
+    def __init__(self, tab) -> None:
         self.tab = tab
 
-    async def js(self, expr: str) -> object:
+    async def js(self, expr: str) -> Any:
         r = await self.tab.send_command(
             "Runtime.evaluate", {"expression": expr, "awaitPromise": True, "returnByValue": True}
         )
@@ -58,7 +59,7 @@ class _Page:
         return Image.open(io.BytesIO(base64.b64decode(r["result"]["data"]))).convert("RGB")
 
 
-async def _open(browser, html_path: Path) -> _Page:  # noqa: ANN001 (choreographer.Browser)
+async def _open(browser, html_path: Path) -> _Page:
     tab = await browser.create_tab(url="", window=True)
     page = _Page(tab)
     await tab.send_command("Page.enable")
@@ -129,7 +130,7 @@ async def _capture(html_path: Path, out_dir: Path, methods: Sequence[str], compa
         # Routing playback: cables are laid one by one in routing order, static camera.
         await page.size(960, 600)
         await page.setup(animated, PLAYBACK_VIEW, labels="none")
-        key_colors = list((await page.js("JSON.parse(document.getElementById('data').textContent).classColors")).values())
+        class_colors = await page.js("JSON.parse(document.getElementById('data').textContent).classColors")
         n = int(await page.js("window.viewer.cableCount"))
         frames, durations = [], []
         steps = 4
@@ -139,7 +140,7 @@ async def _capture(html_path: Path, out_dir: Path, methods: Sequence[str], compa
             durations.append(90)
         durations[-1] = 3500  # hold the finished result (clamps and checks shown)
         path = out_dir / "demo.gif"
-        _save_gif(frames, durations, path, key_colors + ["#ff2a3d", "#e34948"])
+        _save_gif(frames, durations, path, [*class_colors.values(), "#ff2a3d", "#e34948"])
         written.append(path)
     return written
 

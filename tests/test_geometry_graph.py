@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import networkx as nx
 import numpy as np
+import pytest
 
 import main
 from harness_demo.checks import distance_to_volume
@@ -44,6 +45,20 @@ def test_graph_is_connected_and_csr_symmetric(graph):
     assert abs(adj - adj.T).max() == 0
     u, v = (int(x) for x in graph.edges[0])
     assert graph.edge_id(u, v) == graph.edge_id(v, u) == 0
+
+
+def test_vectorised_edge_lookup(graph):
+    e = graph.edges[[0, 5, 17]]
+    assert list(graph.edge_ids(e[:, 1], e[:, 0])) == [0, 5, 17]  # direction does not matter
+    with pytest.raises(KeyError):
+        graph.path_edge_ids([int(e[0, 0]), int(e[2, 1])])  # not adjacent
+
+
+def test_terminals_belong_to_named_equipment(cables):
+    assert {c.from_location for c in cables} == {"Arka raf (sağ)", "Arka raf (sol)"}
+    assert {c.to_location for c in cables} == {"Ön panel (sağ)", "Ön panel (sol)"}
+    d3 = next(c for c in cables if c.name == "D3")  # cross-link from the right rack to the left panel
+    assert (d3.from_location, d3.to_location) == ("Arka raf (sağ)", "Ön panel (sol)")
 
 
 def test_clearance_removes_more_nodes(mesh, volumes, graph):

@@ -1,7 +1,22 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Output folders of the CI smoke run, if it is run locally
+ci-out/
+ci-docs/
+
+# Editors, OS files, local assistant settings
 .vscode/
 .idea/
-.pytest_cache/
+Thumbs.db
+desktop.ini
+.DS_Store
+.claude/settings.local.json
