@@ -3,7 +3,7 @@
 # e.g. the Lagrangian iteration count; pinning keeps `python main.py` reproducible.
 numpy==2.4.6
 scipy==1.17.1
-trimesh==5.1.1
+trimesh==5.2.0
 networkx==3.6.1
 plotly==7.1.0
 kaleido==1.4.0
